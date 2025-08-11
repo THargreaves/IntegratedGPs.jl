@@ -15,9 +15,9 @@ notes):
 
 $$
 \begin{align*}
-I &= \int_0^{\Delta} (2m - u)k(u) du + \\
-  &= \int_\Delta^{m} (S + T - 2u)k(u) du + \\
-    &= \int_m^{M} (M - u)k(u) du
+I &= \int_0^{\Delta} (2m - u)k(u) du \\
+  & \quad + \int_\Delta^{m} (S + T - 2u)k(u) du \\
+    & \quad + \int_m^{M} (M - u)k(u) du
 \end{align*}
 $$
 
@@ -41,7 +41,9 @@ $$
 
 It follows by substitution that
 
-$$I_0(t) := \int_0^t u^\nu K_\nu\left(\frac{u}{\rho}\right) du = 2^{\nu-1} t \rho^\nu \pi^{\frac{1}{2}} \Gamma\left(\nu+\frac{1}{2}\right)\left[K_\nu\left(\frac{t}{\rho}\right) \mathbf{L}_{\nu-1}\left(\frac{t}{\rho}\right)+\mathbf{L}_\nu\left(\frac{t}{\rho}\right) K_{\nu-1}\left(\frac{t}{\rho}\right)\right]$$
+$$
+I_0(t) := \int_0^t u^\nu K_\nu\left(\frac{u}{\rho}\right) du = 2^{\nu-1} t \rho^\nu \pi^{\frac{1}{2}} \Gamma\left(\nu+\frac{1}{2}\right)\left[K_\nu\left(\frac{t}{\rho}\right) \mathbf{L}_{\nu-1}\left(\frac{t}{\rho}\right)+\mathbf{L}_\nu\left(\frac{t}{\rho}\right) K_{\nu-1}\left(\frac{t}{\rho}\right)\right]
+$$
 
 and
 
