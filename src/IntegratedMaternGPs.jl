@@ -24,7 +24,10 @@ function kernel(gp::MaternGP, s, t)
     if d == 0
         return σ2
     else
-        return σ2 * (2^(1 - ν) / gamma(ν)) * (sqrt(2ν) * d / ρ)^ν * besselk(ν, sqrt(2ν) * d / ρ)
+        return σ2 *
+               (2^(1 - ν) / gamma(ν)) *
+               (sqrt(2ν) * d / ρ)^ν *
+               besselk(ν, sqrt(2ν) * d / ρ)
     end
 end
 
@@ -43,6 +46,7 @@ end
 
 # TODO: there are probably simplifications and cancellations possible here
 # TODO: bit worried about numerical stability here
+# TODO: the sqrt(2ν)^{-ν} factor in the argument can likely be cancelled with C
 function kernel(gp::IntegratedMaternGP, s, t)
     C = gp.C
 
@@ -70,10 +74,9 @@ function I0(gp::IntegratedMaternGP{T}, t) where {T}
     # Special case
     t == 0 && return T(0)
 
-    return (2^(ν - 1) * t * ρ^ν * sqrt(π) * gamma(ν + T(0.5))) * (
-        besselk(ν, t / ρ) * struvel(ν - 1, t / ρ) +
-        struvel(ν, t / ρ) * besselk(ν - 1, t / ρ)
-    )
+    x = sqrt(2ν) * t / ρ
+    return (2^(ν - 1) * t * ρ^ν * sqrt(2ν)^(-ν) * sqrt(π) * gamma(ν + T(0.5))) *
+           (besselk(ν, x) * struvel(ν - 1, x) + struvel(ν, x) * besselk(ν - 1, x))
 end
 I0(gp::IntegratedMaternGP, t1, t2) = I0(gp, t2) - I0(gp, t1)
 
@@ -84,7 +87,11 @@ function I1(gp::IntegratedMaternGP{T}, t) where {T}
     # Special case
     t == 0 && return T(0)
 
-    return (2^ν * ρ^(ν + 2) * gamma(ν + 1) - t^(ν + 1) * ρ * besselk(ν + 1, t / ρ))
+    x = sqrt(2ν) * t / ρ
+    return (
+        2^ν * ρ^(ν + 2) * sqrt(2ν)^(-ν - 2) * gamma(ν + 1) -
+        t^(ν + 1) * ρ / sqrt(2ν) * besselk(ν + 1, x)
+    )
 end
 I1(gp::IntegratedMaternGP, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
