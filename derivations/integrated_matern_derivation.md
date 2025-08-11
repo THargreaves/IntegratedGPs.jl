@@ -4,6 +4,10 @@ $$
 k(s, t) =  k(u := |s - t|) = \sigma^2 \frac{2^{1 - \nu}}{\Gamma(\nu)} \left(\sqrt{2\nu}\frac{u}{\rho}\right)^\nu K_\nu\left(\frac{u}{\rho}\right)
 $$
 
+**I missed a factor of $\sqrt{2ν}$ in the Bessel argument. This has been corrected in the code but not in these notes.**
+
+where $K_\nu$ is the modified Bessel function of the second kind, $\sigma^2$ is
+
 For any radial kernel $k(s, t)$ = k(|s - t|) the integrated kernel,
 
 $$
