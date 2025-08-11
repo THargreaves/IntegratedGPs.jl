@@ -65,7 +65,7 @@ function I0(gp::IntegratedMaternGP{T}, t) where {T}
     ρ = gp.ρ
 
     # Special case
-    t == 0 && return 0.0
+    t == 0 && return T(0)
 
     return (2^(ν - 1) * t * ρ^ν * sqrt(π) * gamma(ν + T(0.5))) * (
         besselk(ν, t / ρ) * struvel(ν - 1, t / ρ) +
@@ -79,7 +79,7 @@ function I1(gp::IntegratedMaternGP{T}, t) where {T}
     ρ = gp.ρ
 
     # Special case
-    t == 0 && return 0.0
+    t == 0 && return T(0)
 
     return (2^ν * ρ^(ν + 2) * gamma(ν + 1) - t^(ν + 1) * ρ * besselk(ν + 1, t / ρ))
 end
