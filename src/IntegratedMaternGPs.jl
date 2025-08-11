@@ -3,8 +3,11 @@ module IntegratedMaternGPs
 import Bessels: besselk
 import SpecialFunctions: gamma
 import Struve: struvel
+using LinearAlgebra
+using StaticArrays
 
 export MaternGP, IntegratedMaternGP, kernel
+export windowed_cholesky_update!
 
 struct MaternGP{T}
     ν::T
@@ -21,7 +24,7 @@ function kernel(gp::MaternGP, s, t)
     if d == 0
         return σ2
     else
-        return σ2 * (2^(1 - ν) / gamma(ν)) * (sqrt(2ν) * d / ρ)^ν * besselk(ν, d / ρ)
+        return σ2 * (2^(1 - ν) / gamma(ν)) * (sqrt(2ν) * d / ρ)^ν * besselk(ν, sqrt(2ν) * d / ρ)
     end
 end
 
@@ -84,5 +87,37 @@ function I1(gp::IntegratedMaternGP{T}, t) where {T}
     return (2^ν * ρ^(ν + 2) * gamma(ν + 1) - t^(ν + 1) * ρ * besselk(ν + 1, t / ρ))
 end
 I1(gp::IntegratedMaternGP, t1, t2) = I1(gp, t2) - I1(gp, t1)
+
+function windowed_cholesky_update!(F::Cholesky, ks::AbstractVector)
+    """
+    Update the Cholesky factorization of a covariance kernel matrix from one window shift.
+
+    The current factorization is stored in `F` which is updated in-place without any
+    allocations. `ks` stores entries corresponding to the new row of the covariance kernel
+    matrix.
+
+    See: https://en.wikipedia.org/wiki/Cholesky_decomposition#Adding_and_removing_rows_and_columns
+    """
+    d = length(ks)
+    @inbounds @views begin
+        U = F.U
+        # Remove the first time point using a rank-one update
+        lowrankupdate!(Cholesky(UpperTriangular(U[2:d, 2:d])), U[1, 2:d])
+
+        # Shuffle the result to the top-left
+        for i in 1:(d - 1)
+            for j in 1:(d - 1)
+                U[i, j] = U[i + 1, j + 1]
+            end
+        end
+
+        # Add the new time point
+        ldiv!(U[1:(d - 1), d], UpperTriangular(U[1:(d - 1), 1:(d - 1)])', ks[1:(d - 1)])
+        v2 = sum(abs2, U[1:(d - 1), d])
+        U[d, d] = sqrt(ks[d] - v2)
+    end
+
+    return F
+end
 
 end # IntegratedMaternGPs.jl
