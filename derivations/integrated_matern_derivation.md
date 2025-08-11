@@ -34,7 +34,7 @@ where,
 Gradshteyn and Ryzhik (8th ed.) gives [6.561.4]
 
 $$
-\int_0^1 x^\nu K_\nu(a x) d x=2^{\nu-1} a^{-\nu} \pi^{\frac{1}{2}} \Gamma\left(\nu+\frac{1}{2}\right)\left(K_\nu(a) \mathbf{L}_{\nu-1}(a)+\mathbf{L}_\nu(a) K_{\nu-1}(a)\right)
+`\int_0^1 x^\nu K_\nu(a x) d x=2^{\nu-1} a^{-\nu} \pi^{\frac{1}{2}} \Gamma\left(\nu+\frac{1}{2}\right)\left[K_\nu(a) \mathbf{L}_{\nu-1}(a)+\mathbf{L}_\nu(a) K_{\nu-1}(a)\right]`
 $$
 
 and [6.561.8]
@@ -46,7 +46,7 @@ $$
 It follows by substitution that
 
 $$
-I_0(t) := \int_0^t u^\nu K_\nu\left(\frac{u}{\rho}\right) du = 2^{\nu-1} t \rho^\nu \pi^{\frac{1}{2}} \Gamma\left(\nu+\frac{1}{2}\right)\left(K_\nu\left(\frac{t}{\rho}\right) \mathbf{L}_{\nu-1}\left(\frac{t}{\rho}\right)+\mathbf{L}_\nu\left(\frac{t}{\rho}\right) K_{\nu-1}\left(\frac{t}{\rho}\right)\right)
+`I_0(t) := \int_0^t u^\nu K_\nu\left(\frac{u}{\rho}\right) du = 2^{\nu-1} t \rho^\nu \pi^{\frac{1}{2}} \Gamma\left(\nu+\frac{1}{2}\right)\left[K_\nu\left(\frac{t}{\rho}\right) \mathbf{L}_{\nu-1}\left(\frac{t}{\rho}\right)+\mathbf{L}_\nu\left(\frac{t}{\rho}\right) K_{\nu-1}\left(\frac{t}{\rho}\right)\right]`
 $$
 
 and
