@@ -36,52 +36,46 @@ struct IntegratedMaternGP{T}
     ν::T
     ρ::T
     σ2::T
-    # Cached multiplicative constant — all terms not involving u
-    C::T
+    # Cached constants for I0, I1 computations
+    C0::T
+    C1_const::T
+    C1_bessel::T
     # LRU caches for evaluations of I0 and I1
     I0_cache::LRU{T,T}
     I1_cache::LRU{T,T}
 end
 
 function IntegratedMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
-    C = σ2 * (2^(1 - ν) / gamma(ν)) * (sqrt(2ν) / ρ)^ν
+    # Compute constants
+    C0 = σ2 * sqrt(π) * gamma(ν + 0.5) / gamma(ν)
+    C1_const = σ2 * ρ^2
+    C1_bessel = σ2 * 2^(1 - ν) * ρ^2 / (gamma(ν) * 2ν)
+
     I0_cache = LRU{T,T}(; maxsize=cache_size)
     I1_cache = LRU{T,T}(; maxsize=cache_size)
-    return IntegratedMaternGP{T}(ν, ρ, σ2, C, I0_cache, I1_cache)
+    return IntegratedMaternGP{T}(ν, ρ, σ2, C0, C1_const, C1_bessel, I0_cache, I1_cache)
 end
 
-# TODO: bit worried about numerical stability here
-# TODO: the sqrt(2ν)^{-ν} factor in the argument can likely be cancelled with C
 function kernel(gp::IntegratedMaternGP, s, t)
-    C = gp.C
-
     # Special case where s = t — only middle integral is non-zero
     if s == t
-        return C * (2s * I0(gp, s) - 2I1(gp, s))
+        return 2s * I0(gp, s) - 2I1(gp, s)
     end
 
     Δ = abs(s - t)
     m = min(s, t)
     M = max(s, t)
 
-    # Ia = 2m * I0(gp, Δ) - I1(gp, Δ)
-    # Ib = (s + t) * I0(gp, Δ, m) - 2I1(gp, Δ, m)
-    # Ic = M * I0(gp, m, M) - I1(gp, m, M)
-
     # Compute component integrals (potentially using LRU cache)
-    I0_Δ = I0(gp, Δ)
-    I1_Δ = I1(gp, Δ)
-    I0_m = I0(gp, m)
-    I1_m = I1(gp, m)
-    I0_M = I0(gp, M)
-    I1_M = I1(gp, M)
+    I0_Δ, I0_m, I0_M = I0(gp, Δ), I0(gp, m), I0(gp, M)
+    I1_Δ, I1_m, I1_M = I1(gp, Δ), I1(gp, m), I1(gp, M)
 
     # Combine over the three piecewise integral regions
     Ia = 2m * I0_Δ - I1_Δ
     Ib = (s + t) * (I0_m - I0_Δ) - 2 * (I1_m - I1_Δ)
     Ic = M * (I0_M - I0_m) - (I1_M - I1_m)
 
-    return C * (Ia + Ib + Ic)
+    return Ia + Ib + Ic
 end
 
 function I0(gp::IntegratedMaternGP, t)
@@ -98,8 +92,9 @@ function _I0(gp::IntegratedMaternGP{T}, t) where {T}
     t == 0 && return T(0)
 
     x = sqrt(2ν) * t / ρ
-    return (2^(ν - 1) * t * ρ^ν * sqrt(2ν)^(-ν) * sqrt(π) * gamma(ν + T(0.5))) *
-           (besselk(ν, x) * struvel(ν - 1, x) + struvel(ν, x) * besselk(ν - 1, x))
+    return (
+        gp.C0 * t * (besselk(ν, x) * struvel(ν - 1, x) + struvel(ν, x) * besselk(ν - 1, x))
+    )
 end
 
 function I1(gp::IntegratedMaternGP, t)
@@ -116,10 +111,7 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     t == 0 && return T(0)
 
     x = sqrt(2ν) * t / ρ
-    return (
-        2^ν * ρ^(ν + 2) * sqrt(2ν)^(-ν - 2) * gamma(ν + 1) -
-        t^(ν + 1) * ρ / sqrt(2ν) * besselk(ν + 1, x)
-    )
+    return gp.C1_const - gp.C1_bessel * x^(ν + 1) * besselk(ν + 1, x)
 end
 I1(gp::IntegratedMaternGP, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
