@@ -5,6 +5,7 @@ import SpecialFunctions: gamma
 import Struve: struvel
 using LinearAlgebra
 using StaticArrays
+using LRUCache
 
 export MaternGP, IntegratedMaternGP, kernel
 export windowed_cholesky_update!
@@ -37,14 +38,18 @@ struct IntegratedMaternGP{T}
     σ2::T
     # Cached multiplicative constant — all terms not involving u
     C::T
+    # LRU caches for evaluations of I0 and I1
+    I0_cache::LRU{T,T}
+    I1_cache::LRU{T,T}
 end
 
-function IntegratedMaternGP(ν::T, ρ::T, σ2::T) where {T}
+function IntegratedMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
     C = σ2 * (2^(1 - ν) / gamma(ν)) * (sqrt(2ν) / ρ)^ν
-    return IntegratedMaternGP{T}(ν, ρ, σ2, C)
+    I0_cache = LRU{T,T}(; maxsize=cache_size)
+    I1_cache = LRU{T,T}(; maxsize=cache_size)
+    return IntegratedMaternGP{T}(ν, ρ, σ2, C, I0_cache, I1_cache)
 end
 
-# TODO: there are probably simplifications and cancellations possible here
 # TODO: bit worried about numerical stability here
 # TODO: the sqrt(2ν)^{-ν} factor in the argument can likely be cancelled with C
 function kernel(gp::IntegratedMaternGP, s, t)
@@ -59,15 +64,33 @@ function kernel(gp::IntegratedMaternGP, s, t)
     m = min(s, t)
     M = max(s, t)
 
-    Ia = 2m * I0(gp, Δ) - I1(gp, Δ)
-    Ib = (s + t) * I0(gp, Δ, m) - 2I1(gp, Δ, m)
-    Ic = M * I0(gp, m, M) - I1(gp, m, M)
+    # Ia = 2m * I0(gp, Δ) - I1(gp, Δ)
+    # Ib = (s + t) * I0(gp, Δ, m) - 2I1(gp, Δ, m)
+    # Ic = M * I0(gp, m, M) - I1(gp, m, M)
+
+    # Compute component integrals (potentially using LRU cache)
+    I0_Δ = I0(gp, Δ)
+    I1_Δ = I1(gp, Δ)
+    I0_m = I0(gp, m)
+    I1_m = I1(gp, m)
+    I0_M = I0(gp, M)
+    I1_M = I1(gp, M)
+
+    # Combine over the three piecewise integral regions
+    Ia = 2m * I0_Δ - I1_Δ
+    Ib = (s + t) * (I0_m - I0_Δ) - 2 * (I1_m - I1_Δ)
+    Ic = M * (I0_M - I0_m) - (I1_M - I1_m)
 
     return C * (Ia + Ib + Ic)
 end
 
-# Helper functions from derivations
-function I0(gp::IntegratedMaternGP{T}, t) where {T}
+function I0(gp::IntegratedMaternGP, t)
+    get!(gp.I0_cache, t) do
+        _I0(gp, t)
+    end
+end
+
+function _I0(gp::IntegratedMaternGP{T}, t) where {T}
     ν = gp.ν
     ρ = gp.ρ
 
@@ -78,9 +101,14 @@ function I0(gp::IntegratedMaternGP{T}, t) where {T}
     return (2^(ν - 1) * t * ρ^ν * sqrt(2ν)^(-ν) * sqrt(π) * gamma(ν + T(0.5))) *
            (besselk(ν, x) * struvel(ν - 1, x) + struvel(ν, x) * besselk(ν - 1, x))
 end
-I0(gp::IntegratedMaternGP, t1, t2) = I0(gp, t2) - I0(gp, t1)
 
-function I1(gp::IntegratedMaternGP{T}, t) where {T}
+function I1(gp::IntegratedMaternGP, t)
+    get!(gp.I1_cache, t) do
+        _I1(gp, t)
+    end
+end
+
+function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     ν = gp.ν
     ρ = gp.ρ
 

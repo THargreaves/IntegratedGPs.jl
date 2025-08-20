@@ -27,6 +27,23 @@ using TestItemRunner
     @test kernel_numerical ≈ kernel_analytical rtol = 1e-8
 end
 
+@testitem "LRU Cache" begin
+    using IntegratedMaternGPs
+    using LRUCache
+
+    ν = 1.5
+    ρ = 2.0
+    σ2 = 1.0
+    gp = IntegratedMaternGP(ν, ρ, σ2)
+
+    s, t = 0.8, 1.1
+    kernel(gp, s, t)
+    kernel(gp, s, t)
+
+    @test cache_info(gp.I0_cache).hits == 3
+    @test cache_info(gp.I1_cache).hits == 3
+end
+
 @testitem "Cholesky Update" begin
     using IntegratedMaternGPs
     using LinearAlgebra
