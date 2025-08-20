@@ -125,9 +125,22 @@ function windowed_cholesky_update!(F::Cholesky, ks::AbstractVector)
 
     See: https://en.wikipedia.org/wiki/Cholesky_decomposition#Adding_and_removing_rows_and_columns
     """
-    d = length(ks)
+    windowed_cholesky_remove_first!(F)
+    windowed_cholesky_add_last!(F, ks)
+    return F
+end
+
+function windowed_cholesky_remove_first!(F::Cholesky)
+    """
+    Remove the first row and column from the Cholesky factorization in-place.
+
+    This will leave arbitrary values in the last row and column, which can be be filled with
+    a new row/column when the next time point is added.
+    """
+    d = size(F.U, 1)
+    U = F.U
+
     @inbounds @views begin
-        U = F.U
         # Remove the first time point using a rank-one update
         lowrankupdate!(Cholesky(UpperTriangular(U[2:d, 2:d])), U[1, 2:d])
 
@@ -137,7 +150,21 @@ function windowed_cholesky_update!(F::Cholesky, ks::AbstractVector)
                 U[i, j] = U[i + 1, j + 1]
             end
         end
+    end
 
+    return F
+end
+
+function windowed_cholesky_add_last!(F::Cholesky, ks::AbstractVector)
+    """
+    Add a new row and column to the Cholesky factorization in-place.
+
+    This will replace the last row and column of the factorization with the new values.
+    """
+    d = size(F.U, 1)
+    U = F.U
+
+    @inbounds @views begin
         # Add the new time point
         ldiv!(U[1:(d - 1), d], UpperTriangular(U[1:(d - 1), 1:(d - 1)])', ks[1:(d - 1)])
         v2 = sum(abs2, U[1:(d - 1), d])
@@ -147,4 +174,4 @@ function windowed_cholesky_update!(F::Cholesky, ks::AbstractVector)
     return F
 end
 
-end # IntegratedMaternGPs.jl
+end # module IntegratedMaternGPs
