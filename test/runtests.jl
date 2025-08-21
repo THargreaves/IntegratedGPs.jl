@@ -82,3 +82,49 @@ end
     # Verify that no allocations are made
     @test (@allocated windowed_cholesky_update!(F, ks)) == 0
 end
+
+
+@testitem "Basic CPE operations" begin
+    using IntegratedMaternGPs
+    using Polynomials
+
+    PE = PolynomialExp
+    CPE = CompoundPolynomialExp
+
+    a = PE([1, 2, 3],  1 + 3im) + 
+        PE([4, 5, 6], -2 - 5im)
+    expected_a = CPE([1 + 3im => [1, 2, 3], -2 - 5im => [4, 5, 6]])
+    
+    b = PE([-2.5, 0, 0.5, 0.9], 4 + 7im) + PE([ 2.1, 0.9, 4.3], -2 - 5im)
+    expected_b = CPE([4 + 7im => [-2.5, 0, 0.5, 0.9], -2 - 5im => [2.1, 0.9, 4.3]])
+
+    # Test that adding PolynomialExp terms gives the expected CompoundPolynomialExp
+    @test isequal(a, expected_a) && isequal(b, expected_b)
+
+    c = a + b
+    expected_c = CPE([
+                         1 + 3im => [   1,   2,    3], 
+                        -2 - 5im => [ 6.1, 5.9, 10.3], 
+                         4 + 7im => [-2.5,   0,  0.5, 0.9]
+                    ])
+    # Test that adding CompoundPolynomialExp terms gives the expected CompoundPolynomialExp
+    @test isequal(c, expected_c)
+
+
+    const_val = 4.0
+    const_cpe = CPE(const_val)
+    # Test that floats are correctly converted to CPEs and evaluating a constant expression gives the expected result
+    @test const_cpe(1.35) == const_cpe(2.223) == const_cpe(pi) == const_val
+
+    poly_cpe = CPE([0 => [1, 5, -7]])
+    equiv_poly(x) = 1 + 5 * x - 7 * x^2
+    @test all([isapprox(poly_cpe(x), equiv_poly(x), rtol=1E-8) for x in 0:1E-2:5])
+
+    generic_cpe::CPE = CPE([0 => [2, 3, 0, -5], 1.5 => [2.1, 3.2], 4.8 => [0, 0, 5]])
+    equiv_foo(x) = (2 + 3 * x - 5 * x^3) + (2.1 + 3.2 * x) * exp(-1.5 * x) + 5 * x^2 * exp(-4.8 * x)
+    @test all([isapprox(generic_cpe(x), equiv_foo(x), rtol=1E-8) for x in 0:1E-2:5])  
+end
+
+@testitem "CPE Integration" begin 
+    using IntegratedMaternGPs
+end
