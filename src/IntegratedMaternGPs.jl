@@ -4,11 +4,11 @@ import Bessels: besselk
 import SpecialFunctions: gamma
 import Struve: struvel
 using LinearAlgebra
-using StaticArrays
 using LRUCache
 
 export MaternGP, IntegratedMaternGP, kernel
-export windowed_cholesky_update!
+export windowed_cholesky_update!,
+    windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
 struct MaternGP{T}
     ν::T
