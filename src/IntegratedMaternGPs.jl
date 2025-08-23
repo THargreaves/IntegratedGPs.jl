@@ -5,6 +5,7 @@ import SpecialFunctions: gamma
 import Struve: struvel
 using LinearAlgebra
 using LRUCache
+using HCubature
 
 export MaternGP, IntegratedMaternGP, kernel
 export windowed_cholesky_update!,
@@ -12,13 +13,36 @@ export windowed_cholesky_update!,
 
 export PolynomialExp, CompoundPolynomialExp
 export +, show, isequal
-export integrate
+export integrate, materntocpe, cpetomaternmixture
 
-struct MaternGP{T}
+abstract type GPKernel end
+abstract type StationaryGPKernel <: GPKernel end
+
+struct IntegratedGPKernel <: GPKernel
+    base_kernel::GPKernel
+end
+
+struct MaternGP{T} <: StationaryGPKernel
     ν::T
     ρ::T
     σ2::T
 end
+
+function kernel(gp::GPKernel, s, t)
+    error("GP Kernel has not been implemented.")
+end
+function kernel(igp::IntegratedGPKernel, s, t)
+    return hcubature((s, t) -> kernel(igp.base_kernel, s, t), [0.0, 0.0], [s, t])
+end
+
+function I0(gp::GPKernel, t)
+    hquadrature((x) -> kernel(gp, 0, x), 0.0, t)
+end
+
+function I1(gp::GPKernel, t)
+    hquadrature((x) -> x * kernel(gp, 0, x), 0.0, t)
+end
+
 
 function kernel(gp::MaternGP, s, t)
     ν = gp.ν
@@ -36,7 +60,7 @@ function kernel(gp::MaternGP, s, t)
     end
 end
 
-struct IntegratedMaternGP{T}
+struct IntegratedMaternGP{T} <: GPKernel
     ν::T
     ρ::T
     σ2::T
@@ -117,7 +141,7 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     x = sqrt(2ν) * t / ρ
     return gp.C1_const - gp.C1_bessel * x^(ν + 1) * besselk(ν + 1, x)
 end
-I1(gp::IntegratedMaternGP, t1, t2) = I1(gp, t2) - I1(gp, t1)
+I1(gp::GPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
 function windowed_cholesky_update!(F::Cholesky, ks::AbstractVector)
     """
@@ -209,7 +233,7 @@ CompoundPolynomialExp(pe::PolynomialExp) = CompoundPolynomialExp([pe.beta => pe.
 
 CompoundPolynomialExp(c::Number) = CompoundPolynomialExp([0 => Polynomial([c])])
 
-Base.isequal(a::CompoundPolynomialExp, b::CompoundPolynomialExp) = issetequal(keys(a.polynomials), keys(b.polynomials)) && all([v == b.polynomials[k] for (k, v) in a.polynomials])
+Base.isequal(a::CompoundPolynomialExp, b::CompoundPolynomialExp) = issetequal(keys(a.polynomials), keys(b.polynomials)) && all([isapprox(v, b.polynomials[k], rtol=1E-8) for (k, v) in a.polynomials])
 
 Base.:+(a::PolynomialExp, b::PolynomialExp) = CompoundPolynomialExp(a) + CompoundPolynomialExp(b)
 function Base.:+(a::CompoundPolynomialExp, b::CompoundPolynomialExp)
@@ -231,6 +255,7 @@ function Base.:+(a::CompoundPolynomialExp, b::CompoundPolynomialExp)
     return CompoundPolynomialExp(new_polynomials)
 end
 Base.:+(cpe::CompoundPolynomialExp, pe::PolynomialExp) = cpe + CompoundPolynomialExp(pe)
+Base.:*(cpe::CompoundPolynomialExp, p::Polynomial) = CompoundPolynomialExp([(beta => poly * p) for (beta, poly) in cpe.polynomials])
 
 Base.show(io::IO, pe::PolynomialExp) =  print(io, "($(string(pe.polynomial)))exp(-($(pe.beta))x)")
 function Base.show(io::IO, cpe::CompoundPolynomialExp)
@@ -262,6 +287,23 @@ end
 
 integrate(cpe::CompoundPolynomialExp) = sum([integrate(PolynomialExp(poly, beta)) for (beta, poly) in cpe.polynomials])
 
+I0(cpe::CompoundPolynomialExp, t) = integrate(cpe)(t)
+I1(cpe::CompoundPolynomialExp, t) = integrate(cpe * Polynomial([0, 1]))(t)
+
+function materntocpe(gp::MaternGP)
+    !isapprox(gp.ν % 1.0, 0.5, rtol=1E-8) && error("Provided Matern kernel does not have a finite CPE kernel.")
+
+    p::Int = floor(gp.ν)
+
+    beta = sqrt(2 * gp.ν) / gp.ρ
+    const_factor = gp.σ2 / factorial_ratio(2 * p, p)
+    base_coefs = [binomial(p, p_min_i) * factorial_ratio(p + (p - p_min_i), p) * (2 * sqrt(2 * gp.ν) / gp.ρ)^p_min_i for p_min_i in 0:p]
+    CompoundPolynomialExp([beta => const_factor * Polynomial(base_coefs)])
+end
+
+function cpetomaternmixture(cpe::CompoundPolynomialExp)
+    error("Not implemented.")
+end
 
 
 end # module IntegratedMaternGPs

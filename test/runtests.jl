@@ -146,3 +146,32 @@ end
     generic_cpe = CPE([1.567 => [5.023, -1.23], 4.254 => [0, 0.93, 0, 10.92]])
     @test integrals_match(poly_cpe)
 end
+
+@testitem "Matern to CPE" begin
+    using IntegratedMaternGPs
+    CPE = CompoundPolynomialExp
+
+    gp_p0 = MaternGP(0.5, 1.0, 1.0)
+    target_p0 = CPE([1 => [1]])
+    @test isequal(materntocpe(gp_p0), target_p0)
+
+    gp_p1 = MaternGP(1.5, 1.0, 1.0)
+    target_p1 = CPE([sqrt(3) => [1, sqrt(3)]])
+    @test isequal(materntocpe(gp_p1), target_p1)
+
+    gp_p2 = MaternGP(2.5, 1.0, 1.0)
+    target_p2 = CPE([sqrt(5.0) => [1.0, sqrt(5.0), 5.0 / 3.0]])
+    @test isequal(materntocpe(gp_p2), target_p2)
+
+
+
+
+    ν = 5.5
+    ρ = 3.2
+    σ2 = 4.5
+    gp = MaternGP(ν, ρ, σ2)
+
+    cpe = materntocpe(gp)
+
+    @test all([isapprox(cpe(t), kernel(gp, 0, t), rtol=1E-8) for t in 0:1E-2:5])
+end
