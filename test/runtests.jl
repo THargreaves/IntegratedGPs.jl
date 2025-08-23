@@ -160,7 +160,7 @@ end
     @test isequal(materntocpe(gp_p1), target_p1)
 
     gp_p2 = MaternGP(2.5, 1.0, 1.0)
-    target_p2 = CPE([sqrt(5.0) => [1.0, sqrt(5.0), 5.0 / 3.0]])
+    target_p2 = CPE([sqrt(5) => [1, sqrt(5), 5 / 3]])
     @test isequal(materntocpe(gp_p2), target_p2)
 
 
@@ -174,4 +174,24 @@ end
     cpe = materntocpe(gp)
 
     @test all([isapprox(cpe(t), kernel(gp, 0, t), rtol=1E-8) for t in 0:1E-2:5])
+end
+
+@testitem "CPE to Matern Mixture" begin
+    using IntegratedMaternGPs
+    CPE = CompoundPolynomialExp
+
+    cpe_p0 = CPE([1 => [1]])
+    target_p0 = [MaternGP(0.5, 1.0, 1.0)]
+    println(cpetomaternmixture(cpe_p0))
+    #@test isapprox(cpetomaternmixture(cpe_p0), target_p0, rtol=1E-8)
+
+    cpe_p1 = CPE([sqrt(3) => [1, sqrt(3)]])
+    target_p1 = [MaternGP(1.5, 1.0, 1.0)]
+    println(cpetomaternmixture(cpe_p1))
+    #@test isapprox(cpetomaternmixture(cpe_p1), target_p1, rtol=1E-8)
+
+    cpe_p2 = CPE([sqrt(5) => [1, sqrt(5), 5 / 3]])
+    target_p2 = [MaternGP(2.5, 1.0, 1.0)]
+    println(cpetomaternmixture(cpe_p2))
+    #@test isapprox(cpetomaternmixture(cpe_p2), target_p2, rtol=1E-8)
 end

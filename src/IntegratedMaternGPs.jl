@@ -3,6 +3,7 @@ module IntegratedMaternGPs
 import Bessels: besselk
 import SpecialFunctions: gamma
 import Struve: struvel
+import Base: isapprox
 using LinearAlgebra
 using LRUCache
 using HCubature
@@ -12,7 +13,7 @@ export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
 export PolynomialExp, CompoundPolynomialExp
-export +, show, isequal
+export +, show, isequal, isapprox
 export integrate, materntocpe, cpetomaternmixture
 
 abstract type GPKernel end
@@ -27,6 +28,10 @@ struct MaternGP{T} <: StationaryGPKernel
     ρ::T
     σ2::T
 end
+
+isapprox(a::MaternGP, b::MaternGP; rtol=1E-8) = isapprox(a.ν,  b.ν;  rtol) && 
+                                                isapprox(a.ρ,  b.ρ;  rtol) && 
+                                                isapprox(a.σ2, b.σ2; rtol)
 
 function kernel(gp::GPKernel, s, t)
     error("GP Kernel has not been implemented.")
@@ -291,7 +296,7 @@ I0(cpe::CompoundPolynomialExp, t) = integrate(cpe)(t)
 I1(cpe::CompoundPolynomialExp, t) = integrate(cpe * Polynomial([0, 1]))(t)
 
 function materntocpe(gp::MaternGP)
-    !isapprox(gp.ν % 1.0, 0.5, rtol=1E-8) && error("Provided Matern kernel does not have a finite CPE kernel.")
+    !isapprox(gp.ν % 1.0, 0.5; rtol=1E-8) && error("Provided Matern kernel does not have a finite CPE kernel.")
 
     p::Int = floor(gp.ν)
 
@@ -302,7 +307,27 @@ function materntocpe(gp::MaternGP)
 end
 
 function cpetomaternmixture(cpe::CompoundPolynomialExp)
-    error("Not implemented.")
+    res = []
+    for (beta, poly) in cpe.polynomials
+        new_poly = poly 
+        while sum(new_poly[0:end].^2) > 1E-8
+            println("CHECK THIS: ", new_poly)
+            p = Polynomials.degree(new_poly)
+            ν = p + 0.5
+            ρ = sqrt(2ν) / beta
+
+            matern_base = MaternGP(ν, ρ, 1.0)
+            base_cpe = materntocpe(matern_base)
+            base_poly = base_cpe.polynomials[beta]
+            σ2 = new_poly[p] / base_poly[p]
+            base_poly *= σ2
+
+            new_poly -= base_poly
+
+            push!(res, MaternGP(ν, ρ, σ2))
+        end
+    end
+    res
 end
 
 
