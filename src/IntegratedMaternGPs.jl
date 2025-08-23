@@ -12,6 +12,7 @@ export windowed_cholesky_update!,
 
 export PolynomialExp, CompoundPolynomialExp
 export +, show, isequal
+export integrate
 
 struct MaternGP{T}
     ν::T
@@ -193,18 +194,18 @@ end
 PolynomialExp(arr::Vector{T}, beta::Number) where T <: Number = PolynomialExp(Polynomial(arr), beta)
 (pe::PolynomialExp)(x) = pe.polynomial(x) * exp(-pe.beta * x);
 
-oneunit(PolynomialExp) = PolynomialExp(PolynomialExp(1.0), 0.0)
+oneunit(PolynomialExp) = PolynomialExp(Polynomial([1.0]), 0.0)
 Base.:*(c::Number, pe::PolynomialExp) = PolynomialExp(c * pe.polynomial, pe.beta);
 Base.:/(pe::PolynomialExp, c::Number) = PolynomialExp(pe.polynomial / c, pe.beta);
-degree(pe::PolynomialExp) = degree(pe.polynomial)
+degree(pe::PolynomialExp) = Polynomials.degree(pe.polynomial)
 
 
 (cpe::CompoundPolynomialExp)(x) = sum(PolynomialExp(poly, beta)(x) for (beta, poly) in cpe.polynomials)
 
-CompoundPolynomialExp(pe::PolynomialExp) = CompoundPolynomialExp(Dict([(pe.beta, pe.polynomial)]))
-zero(CompoundPolynomialExp) = CompoundPolynomialExp(Dict())
+zero(CompoundPolynomialExp) = CompoundPolynomialExp(Dict{Number, Polynomial}())
 CompoundPolynomialExp(itr::Vector{Pair{T, P}}) where {T <: Number, P <: Polynomial} = CompoundPolynomialExp(Dict(itr))
 CompoundPolynomialExp(itr::Vector{Pair{T, P}}) where {T <: Number, P <: Vector} = CompoundPolynomialExp(Dict([(k, Polynomial(v)) for (k, v) in itr]))
+CompoundPolynomialExp(pe::PolynomialExp) = CompoundPolynomialExp([pe.beta => pe.polynomial])
 
 CompoundPolynomialExp(c::Number) = CompoundPolynomialExp([0 => Polynomial([c])])
 
@@ -229,6 +230,7 @@ function Base.:+(a::CompoundPolynomialExp, b::CompoundPolynomialExp)
 
     return CompoundPolynomialExp(new_polynomials)
 end
+Base.:+(cpe::CompoundPolynomialExp, pe::PolynomialExp) = cpe + CompoundPolynomialExp(pe)
 
 function Base.show(io::IO, cpe::CompoundPolynomialExp)
     res = "CPE: "
@@ -243,21 +245,26 @@ Base.convert(::Type{CompoundPolynomialExp}, x::Float64) = CompoundPolynomialExp(
 
 
 # Calculate n! / k! where n >= k
-MAX_N = 20;
-factorial_memo = [factorial(i) for i in 0:MAX_N]
-factorial_ratio(n, k) = factorial_memo[n] / factorial[k]
+factorial_ratio(n, k) = factorial(n) / factorial(k)
 
 function integrate(pe::PolynomialExp)
     res = zero(CompoundPolynomialExp)
-    for n in 0:degree(pe)
-        new_poly = Polynomial([factorial_ratio(n, n_min_i) / (beta^(n - n_min_i + 1)) for n_min_i in 0:n])
-        res += PolynomialExp(pe[n] * new_poly, pe.beta)
-        res += pe[n] * oneunit(PolynomialExp) / (pe.beta^(n + 1))
+    beta = pe.beta
+    poly = pe.polynomial
+
+    if beta == 0
+        res += PolynomialExp(Polynomials.integrate(poly), beta)
+    else
+        for n in 0:degree(pe)
+            new_poly = Polynomial([factorial_ratio(n, n_min_i) / beta^(n - n_min_i + 1) for n_min_i in 0:n])
+            res += PolynomialExp(poly[n] * new_poly, beta)
+            res += poly[n] * oneunit(PolynomialExp) / beta^(n + 1)
+        end
     end
     res
 end
 
-integrate(cpe::CompoundPolynomialExp) = sum([integrate(pe) for pe in cpe.terms])
+integrate(cpe::CompoundPolynomialExp) = sum([integrate(PolynomialExp(poly, beta)) for (beta, poly) in cpe.polynomials])
 
 
 

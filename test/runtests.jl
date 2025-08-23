@@ -110,21 +110,40 @@ end
     # Test that adding CompoundPolynomialExp terms gives the expected CompoundPolynomialExp
     @test isequal(c, expected_c)
 
+    functions_match(f, g) = all(isapprox(f(x), g(x)) for x in 0:1E-2:5)
+
 
     const_val = 4.0
     const_cpe = CPE(const_val)
     # Test that floats are correctly converted to CPEs and evaluating a constant expression gives the expected result
-    @test const_cpe(1.35) == const_cpe(2.223) == const_cpe(pi) == const_val
+    @test functions_match(const_cpe, (x) -> const_val)
 
     poly_cpe = CPE([0 => [1, 5, -7]])
     equiv_poly(x) = 1 + 5 * x - 7 * x^2
-    @test all([isapprox(poly_cpe(x), equiv_poly(x), rtol=1E-8) for x in 0:1E-2:5])
+    @test functions_match(poly_cpe, equiv_poly)
 
-    generic_cpe::CPE = CPE([0 => [2, 3, 0, -5], 1.5 => [2.1, 3.2], 4.8 => [0, 0, 5]])
+    generic_cpe = CPE([0 => [2, 3, 0, -5], 1.5 => [2.1, 3.2], 4.8 => [0, 0, 5]])
     equiv_foo(x) = (2 + 3 * x - 5 * x^3) + (2.1 + 3.2 * x) * exp(-1.5 * x) + 5 * x^2 * exp(-4.8 * x)
-    @test all([isapprox(generic_cpe(x), equiv_foo(x), rtol=1E-8) for x in 0:1E-2:5])  
+    @test functions_match(generic_cpe, equiv_foo)  
 end
 
 @testitem "CPE Integration" begin 
     using IntegratedMaternGPs
+    using HCubature
+
+    CPE = CompoundPolynomialExp
+
+    functions_match(f, g) = all(isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-2:5)
+    integrals_match(f::CPE) = functions_match(integrate(f), (x) -> hquadrature((y) -> f(y), 0.0, x)[1])
+
+    const_val = 5.345
+    const_cpe = CPE([0 => [const_val]])
+    @test integrals_match(const_cpe)
+
+    poly_cpe = CPE([0 => [2.3, -5.425, 8.234, 0.987]])
+    @test integrals_match(poly_cpe)
+
+    generic_cpe = CPE([1.567 => [5.023, -1.23], 4.254 => [0, 0.93, 0, 10.92]])
+    @test integrals_match(poly_cpe)
+
 end
