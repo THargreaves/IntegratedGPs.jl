@@ -232,13 +232,9 @@ function Base.:+(a::CompoundPolynomialExp, b::CompoundPolynomialExp)
 end
 Base.:+(cpe::CompoundPolynomialExp, pe::PolynomialExp) = cpe + CompoundPolynomialExp(pe)
 
+Base.show(io::IO, pe::PolynomialExp) =  print(io, "($(string(pe.polynomial)))exp(-($(pe.beta))x)")
 function Base.show(io::IO, cpe::CompoundPolynomialExp)
-    res = "CPE: "
-    cnt = 0 
-    for (k, v) in cpe.polynomials
-        cnt += 1
-        res *= "($(string(v)))exp(-($(k))x)" * (cnt == length(keys(cpe.polynomials)) ? "" : " + ")
-    end
+    res = join([PolynomialExp(poly, beta) for (beta, poly) in cpe.polynomials], " + ")
     print(io, res)
 end
 Base.convert(::Type{CompoundPolynomialExp}, x::Float64) = CompoundPolynomialExp(Dict([(0, Polynomial([x]))]))

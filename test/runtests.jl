@@ -145,5 +145,4 @@ end
 
     generic_cpe = CPE([1.567 => [5.023, -1.23], 4.254 => [0, 0.93, 0, 10.92]])
     @test integrals_match(poly_cpe)
-
 end
