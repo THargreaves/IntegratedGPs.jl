@@ -333,4 +333,50 @@ function cpetomaternmixture(cpe::CompoundPolynomialExp)
 end
 
 
+struct SSM{T} where T
+    A::Matrix{T}
+    Q::Matrix{T}
+    H::Matrix{T}
+end
+
+function fit_cov(ssm::SSM)
+    size(ssm.H)[1] != 1 && error("SSM needs to have one output for covariance matching to work.")
+    eigen_vals = eigen(ssm.A)[1]
+
+    one_hot(n) = [i == n ? 1 : 0 for i in 1:n]
+
+    prev_eigen = -Inf
+    mult = 0
+    basis = Vector{PolynomialExp}()
+    for eig in eigen_vals
+        push!(basis, PolynomialExp(onehot(mult + 1), -eig))
+        if is_approx(eig, prev_eigen, rtol=1E-4)
+            mult = 0
+        else
+            mult += 1
+        end
+        prev_eigen = eig
+    end
+    N = 10
+
+    A = zeros((N, length(basis)))
+    v = zeros((N,1))
+
+    ssm_cov = Q
+
+    for t in 1:N
+        v[t] = ssm.H * ssm_cov * ssm.H'
+        for (ind, pe) in enumerate(basis) 
+            A[t,ind] = pe(t)
+        end
+
+        ssm_cov = ssm.A * ssm_cov * ssm.A' + ssm.Q
+    end
+
+    coefs = inv(A' * A) * A' * v 
+
+    res = sum(coefs .* basis)
+end
+
+
 end # module IntegratedMaternGPs
