@@ -378,5 +378,9 @@ function fit_cov(ssm::SSM)
     res = sum(coefs .* basis)
 end
 
+function ssm2GPKernel(ssm::SSM)
+    cpetomaternmixture(fit_cov(ssm))
+end
+
 
 end # module IntegratedMaternGPs
