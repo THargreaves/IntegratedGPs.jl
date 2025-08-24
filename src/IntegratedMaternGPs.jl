@@ -39,6 +39,9 @@ end
 function kernel(igp::IntegratedGPKernel, s, t)
     return hcubature((s, t) -> kernel(igp.base_kernel, s, t), [0.0, 0.0], [s, t])
 end
+function kernel(gp_mixture::Vector{T}, s, t) where T <: GPKernel
+    sum([kernel(gp, s, t) for gp in gp_mixture])
+end
 
 function I0(gp::GPKernel, t)
     hquadrature((x) -> kernel(gp, 0, x), 0.0, t)
@@ -307,11 +310,10 @@ function materntocpe(gp::MaternGP)
 end
 
 function cpetomaternmixture(cpe::CompoundPolynomialExp)
-    res = []
+    res = Vector{MaternGP}()
     for (beta, poly) in cpe.polynomials
         new_poly = poly 
         while sum(new_poly[0:end].^2) > 1E-8
-            println("CHECK THIS: ", new_poly)
             p = Polynomials.degree(new_poly)
             ν = p + 0.5
             ρ = sqrt(2ν) / beta

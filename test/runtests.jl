@@ -180,18 +180,17 @@ end
     using IntegratedMaternGPs
     CPE = CompoundPolynomialExp
 
+    functions_match(f, g) = all(isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-2:5)
+
     cpe_p0 = CPE([1 => [1]])
     target_p0 = [MaternGP(0.5, 1.0, 1.0)]
-    println(cpetomaternmixture(cpe_p0))
-    #@test isapprox(cpetomaternmixture(cpe_p0), target_p0, rtol=1E-8)
+    @test functions_match((t) -> kernel(cpetomaternmixture(cpe_p0), 0.0, t), (t) -> kernel(target_p0, 0.0, t))
 
     cpe_p1 = CPE([sqrt(3) => [1, sqrt(3)]])
     target_p1 = [MaternGP(1.5, 1.0, 1.0)]
-    println(cpetomaternmixture(cpe_p1))
-    #@test isapprox(cpetomaternmixture(cpe_p1), target_p1, rtol=1E-8)
+    @test functions_match((t) -> kernel(cpetomaternmixture(cpe_p1), 0.0, t), (t) -> kernel(target_p1, 0.0, t))
 
     cpe_p2 = CPE([sqrt(5) => [1, sqrt(5), 5 / 3]])
     target_p2 = [MaternGP(2.5, 1.0, 1.0)]
-    println(cpetomaternmixture(cpe_p2))
-    #@test isapprox(cpetomaternmixture(cpe_p2), target_p2, rtol=1E-8)
+    @test functions_match((t) -> kernel(cpetomaternmixture(cpe_p2), 0.0, t), (t) -> kernel(target_p2, 0.0, t))
 end
