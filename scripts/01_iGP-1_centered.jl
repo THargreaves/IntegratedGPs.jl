@@ -259,15 +259,12 @@ for k in 2:d
     q2 = ks[k] - sum(abs2, w)
 
     f = f[(k - 1):-1:1]  # Reverse ordering to account for x having different ordering to k/t
+    A = ExpandingTransition(f)
 
     # Predict forwards
-    μ[2:k] = μ[1:(k - 1)]
-    μ[1] = dot(f, μ[2:k])
-    S = Σ[1:(k - 1), 1:(k - 1)]
-    Σ[2:k, 2:k] = S
-    Σ[1, 1] = f' * S * f + q2
-    Σ[2:k, 1] = S * f
-    Σ[1, 2:k] = Σ[2:k, 1]'
+    μ = A * (@view μ[1:(k - 1)])
+    Σ = quadratic_form(A, Symmetric(@view Σ[1:(k - 1), 1:(k - 1)]))
+    Σ[1, 1] += q2
 
     # Perform Kalman update
     y_pred = μ[1]
@@ -297,21 +294,15 @@ for k in (d + 1):K
 
     w = F.U' \ ks
     f = F.U \ w
-
-    f = f[d:-1:1]  # Reverse ordering to account for x having different ordering to k/t
-
     q2 = k_new - sum(abs2, w)
 
+    f = f[d:-1:1]  # Reverse ordering to account for x having different ordering to k/t
+    A = ShiftingTransition(f)
+
     # Predict forwards
-    m = dot(f, μ)
-    μ[2:d] = μ[1:(d - 1)]
-    μ[1] = m
-    S11 = f' * Σ * f + q2
-    S1 = Σ[1:(d - 1), 1:(d - 1)] * f[1:(d - 1)] + Σ[1:(d - 1), d] * f[d]
-    Σ[2:d, 2:d] = Σ[1:(d - 1), 1:(d - 1)]
-    Σ[1, 1] = S11
-    Σ[2:d, 1] = S1
-    Σ[1, 2:d] = Σ[2:d, 1]'
+    μ = A * μ
+    Σ = quadratic_form(A, Symmetric(Σ))
+    Σ[1, 1] += q2
 
     # Perform Kalman update
     y_pred = μ[1]
