@@ -33,10 +33,10 @@ function I1(gp::GPKernel, t)
 end
 
 
-struct MaternGP{T} <: StationaryGPKernel
-    ν::T
-    ρ::T
-    σ2::T
+struct MaternGP{T1, T2, T3} <: StationaryGPKernel
+    ν::T1
+    ρ::T2
+    σ2::T3
 end
 
 isapprox(a::MaternGP, b::MaternGP; rtol=1E-8) = isapprox(a.ν,  b.ν;  rtol) && 

@@ -346,6 +346,7 @@ end
     CPE = CompoundPolynomialExp
 
     functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
+    functions_match_at_int(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1:10])
 
     # The AR(1) process has a known closed form covariance. Test that it matches the equivalent Matern Mixture.
     a = 0.9
@@ -356,7 +357,7 @@ end
 
     @test functions_match((t) -> kernel(candidate_kernel, 0.0, t), target_cov)
 
-    general_A = [0.52 -0.32; -0.80 0.32]
+    general_A = [0.52 -0.32; -0.20 0.60]
     general_Q = [3.58 1.78; 1.78 4.56]
     general_H = [5.43 -0.67;]
     any([abs(z) > 1 for z in eigen(general_A).values]) && error("A matrix should not have poles outside the unit circle; found $(eigen(general_A).values) with magnitude $([abs(z) for z in eigen(general_A).values])")
@@ -366,5 +367,7 @@ end
     general_kernel = ssm2GPKernel(general_ssm)
     stationary_σ2 = only(general_H * lyapd(general_A, general_Q) * general_H')
 
-    @test functions_match((t) -> kernel(general_kernel, 0.0, t), (t) -> stationary_σ2 * general_H * exp(general_A * t) * general_H')
+    @test functions_match_at_int((t) -> real(kernel(general_kernel, 0.0, t)), (t) -> stationary_σ2 * real(only(general_H * general_A^t * general_H')))
+    
+    # TODO: Implement the case corresponding to complex Matern arguments
 end
