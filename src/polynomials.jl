@@ -42,19 +42,10 @@ function Base.:+(a::CompoundPolynomialExp, b::CompoundPolynomialExp)
     only_a = setdiff(keys(a.polynomials), keys(b.polynomials))
     only_b = setdiff(keys(b.polynomials), keys(a.polynomials))
     shared_betas = intersect(keys(a.polynomials), keys(b.polynomials))
-    new_polynomials = Dict{Number, Polynomial}()
 
-    for beta in only_a
-        new_polynomials[beta] = a.polynomials[beta]
-    end
-    for beta in only_b
-        new_polynomials[beta] = b.polynomials[beta]
-    end
-    for beta in shared_betas
-        new_polynomials[beta] = a.polynomials[beta] + b.polynomials[beta]
-    end
-
-    return CompoundPolynomialExp(new_polynomials)
+    CompoundPolynomialExp(vcat([beta => a.polynomials[beta] for beta in only_a], 
+                                [beta => b.polynomials[beta] for beta in only_b], 
+                                [beta => a.polynomials[beta] + b.polynomials[beta] for beta in shared_betas]))
 end
 Base.:+(cpe::CompoundPolynomialExp, pe::PolynomialExp) = cpe + CompoundPolynomialExp(pe)
 Base.:*(cpe::CompoundPolynomialExp, p::Polynomial) = CompoundPolynomialExp([(beta => poly * p) for (beta, poly) in cpe.polynomials])
@@ -71,7 +62,7 @@ Base.convert(::Type{CompoundPolynomialExp}, pe::PolynomialExp) = CompoundPolynom
 factorial_ratio(n, k) = factorial(n) / factorial(k)
 
 # Evaluate the integral of x^n exp(-beta x) for beta != 0
-integrated_monomial(n, beta) = CompoundPolynomialExp([  
+integrated_monomial(n, beta) = CompoundPolynomialExp([
                                                         0 => [beta^(-n - 1)], 
                                                         beta => [factorial_ratio(n, n_min_i) / beta^(n - n_min_i + 1) for n_min_i in 0:n]
                                                     ])
@@ -91,6 +82,8 @@ integrate(cpe::CompoundPolynomialExp) = sum([integrate(PolynomialExp(poly, beta)
 I0(cpe::CompoundPolynomialExp, t) = integrate(cpe)(t)
 I1(cpe::CompoundPolynomialExp, t) = integrate(cpe * Polynomial([0, 1]))(t)
 
+
+materntocpe(ν, ρ, σ2) = materntocpe(MaternGP(ν, ρ, σ2))
 function materntocpe(gp::MaternGP)
     !isinteger(gp.ν - 0.5) && error("Provided Matern kernel does not have a finite CPE kernel.")
 
@@ -113,8 +106,7 @@ function cpetomaternmixture(cpe::CompoundPolynomialExp)
             ν = p + 0.5
             ρ = sqrt(2ν) / beta
 
-            matern_base = MaternGP(ν, ρ, 1.0)
-            base_cpe = materntocpe(matern_base)
+            base_cpe = materntocpe(ν, ρ, 1.0)
             base_poly = only(values(base_cpe.polynomials))
             σ2 = temp_poly[p] / base_poly[p]
 
@@ -164,7 +156,7 @@ function fit_cov(ssm::SSM)
     end
 
     M = zeros((N, N))
-    v = zeros((N,1))
+    v = zeros((N, 1))
 
     process_σ2 = only(ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H')
     ssm_cov = process_σ2 * ssm.A
