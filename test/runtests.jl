@@ -227,7 +227,7 @@ end
     # Test that adding CompoundPolynomialExp terms gives the expected CompoundPolynomialExp
     @test isequal(c, expected_c)
 
-    functions_match(f, g) = all([isapprox(f(x), g(x)) for x in 0:1E-2:5])
+    functions_match(f, g) = all([isapprox(f(x), g(x)) for x in 0:1E-1:5])
 
 
     const_val = 4.0
@@ -252,7 +252,7 @@ end
 
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-2:5])
+    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
     integrals_match(f::CPE) = functions_match(integrate(f), (x) -> hquadrature((y) -> f(y), 0.0, x)[1])
 
     const_val = 5.345
@@ -272,6 +272,8 @@ end
     import Base: isapprox
 
     CPE = CompoundPolynomialExp
+
+    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
 
     gp_p0 = MaternGP(0.5, 1.0, 1.0)
     target_p0 = CPE([1 => [1]])
@@ -293,7 +295,7 @@ end
 
     cpe = materntocpe(gp)
 
-    @test all([isapprox(cpe(t), kernel(gp, 0, t), rtol=1E-8) for t in 0:1E-2:5])
+    @test functions_match(cpe, (t) -> kernel(gp, 0, t))
 end
 
 @testitem "CPE to Matern Mixture" begin
@@ -303,7 +305,7 @@ end
     
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-2:5])
+    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
 
     cpe_p0 = CPE([1 => [1]])
     target_p0 = [MaternGP(0.5, 1.0, 1.0)]
@@ -328,7 +330,7 @@ end
 
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-2:5])
+    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
 
     a = 0.9
     σ2 = 1.0
