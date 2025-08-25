@@ -164,7 +164,7 @@ function fit_cov(ssm::SSM)
     M = zeros((N, N))
     v = zeros((N, 1))
 
-    process_σ2 = only(ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H')
+    process_σ2 = only(ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H') # Solve the Discrete Algebraic Lyapunov Equation to get the stationary process variance
     ssm_cov = process_σ2 * ssm.A
 
     for t in 1:N
