@@ -301,7 +301,6 @@ end
 @testitem "CPE to Matern Mixture" begin
     using IntegratedMaternGPs
     
-    import Base: isapprox
     
     CPE = CompoundPolynomialExp
 
@@ -321,4 +320,25 @@ end
     target_p2 = [MaternGP(2.5, 1.0, 1.0)]
     candidate_p2 = cpetomaternmixture(cpe_p2)
     @test functions_match((t) -> kernel(candidate_p2, 0.0, t), (t) -> kernel(target_p2, 0.0, t))
+end
+
+@testitem "SSM to CPE" begin
+    using IntegratedMaternGPs
+
+    import Base: isapprox
+
+    CPE = CompoundPolynomialExp
+
+    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-2:5])
+
+    a = 0.9
+    σ2 = 1.0
+    ar_1 = SSM([a;;], [σ2;;], [1.0;;])
+    candidate_kernel = ssm2GPKernel(ar_1)
+    target_cov = CPE([-log(a) => [σ2 / (1 - a^2)]])
+
+    println([kernel(candidate_kernel, 0.0, t) for t in 0:5])
+    println([target_cov(t) for t in 0:5])
+
+    @test functions_match((t) -> kernel(candidate_kernel, 0.0, t), target_cov)
 end

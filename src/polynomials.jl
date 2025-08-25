@@ -1,10 +1,10 @@
-using Polynomials, HCubature, LinearAlgebra
+using Polynomials, HCubature, LinearAlgebra, MatrixEquations
 
 import Base: isapprox
 
-export PolynomialExp, CompoundPolynomialExp
+export PolynomialExp, CompoundPolynomialExp, SSM
 export +, show, isequal, isapprox
-export integrate, materntocpe, cpetomaternmixture
+export integrate, materntocpe, cpetomaternmixture, ssm2GPKernel
 
 # Representation of Σ c_i * x^{n_i} exp(-beta x)
 struct PolynomialExp
@@ -63,6 +63,7 @@ function Base.show(io::IO, cpe::CompoundPolynomialExp)
     print(io, res)
 end
 Base.convert(::Type{CompoundPolynomialExp}, x::Float64) = CompoundPolynomialExp(Dict([(0, Polynomial([x]))]))
+Base.convert(::Type{CompoundPolynomialExp}, pe::PolynomialExp) = CompoundPolynomialExp(pe)
 
 # Calculate n! / k! where n >= k
 factorial_ratio(n, k) = factorial(n) / factorial(k)
@@ -135,16 +136,16 @@ end
 
 function fit_cov(ssm::SSM)
     size(ssm.H)[1] != 1 && error("SSM needs to have one output for covariance matching to work.")
-    eigen_vals = eigen(ssm.A)[1]
+    eigen_vals = eigen(ssm.A).values
 
-    one_hot(n) = [i == n ? 1 : 0 for i in 1:n]
+    onehot(n) = [i == n ? 1 : 0 for i in 1:n]
 
     prev_eigen = -Inf
     mult = 0
     basis = Vector{PolynomialExp}()
     for eig in eigen_vals
-        push!(basis, PolynomialExp(onehot(mult + 1), -eig))
-        if is_approx(eig, prev_eigen, rtol=1E-4)
+        push!(basis, PolynomialExp(onehot(mult + 1), -log(eig)))
+        if Base.isapprox(eig, prev_eigen, rtol=1E-4)
             mult = 0
         else
             mult += 1
@@ -153,23 +154,24 @@ function fit_cov(ssm::SSM)
     end
     N = 10
 
-    A = zeros((N, length(basis)))
+    M = zeros((N, length(basis)))
     v = zeros((N,1))
 
-    ssm_cov = Q
+    process_σ2 = (ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H')[1]
+    ssm_cov = process_σ2 * ssm.A #Matrix(1.0I, length(basis), length(basis))
 
     for t in 1:N
-        v[t] = ssm.H * ssm_cov * ssm.H'
+        v[t] = (ssm.H * ssm_cov * ssm.H')[1]
         for (ind, pe) in enumerate(basis) 
-            A[t,ind] = pe(t)
+            M[t,ind] = pe(t)
         end
 
-        ssm_cov = ssm.A * ssm_cov * ssm.A' + ssm.Q
+        ssm_cov = ssm.A * ssm_cov
     end
 
-    coefs = inv(A' * A) * A' * v 
+    coefs = inv(M' * M) * M' * v 
 
-    res = sum(coefs .* basis)
+    CompoundPolynomialExp(sum(coefs .* basis))
 end
 
 function ssm2GPKernel(ssm::SSM)
