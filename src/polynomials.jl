@@ -6,15 +6,6 @@ export PolynomialExp, CompoundPolynomialExp, SSM
 export +, show, isequal, isapprox
 export integrate, materntocpe, cpetomaternmixture, ssm2GPKernel
 
-# Representation of Σ c_i * x^{n_i} exp(-beta x)
-struct PolynomialExp
-    polynomial::Polynomial
-    beta::Number
-end
-# Representation of Σ c_i * x^{n_i} exp(-beta_i x)
-struct CompoundPolynomialExp{T<:Number,P<:Polynomial}
-    polynomials::Dict{T,P}
-end
 
 PolynomialExp(arr::Vector{T}, beta::Number) where T <: Number = PolynomialExp(Polynomial(arr), beta)
 (pe::PolynomialExp)(x) = pe.polynomial(x) * exp(-pe.beta * x);

@@ -3,7 +3,7 @@ import SpecialFunctions: gamma
 import Struve: struvel
 using LRUCache
 
-export MaternGP, IntegratedGeneralMaternGP, kernel
+export MaternGP, GeneralMaternGP, IntegratedGeneralMaternGP, CPEMaternGP, IntegratedCPEMaternGP, kernel
 export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
@@ -79,7 +79,7 @@ struct GeneralMaternGP{T1, T2, T3} <: MaternGP
     σ2::T3
 end
 
-struct CPEMaternGP <: MaternGP
+struct CPEMaternGP{T1, T2, T3} <: MaternGP
     ν::T1
     ρ::T2
     σ2::T3
