@@ -341,6 +341,7 @@ end
     using IntegratedMaternGPs
 
     import Base: isapprox
+    using LinearAlgebra, MatrixEquations
 
     CPE = CompoundPolynomialExp
 
@@ -354,4 +355,16 @@ end
     target_cov = CPE([-log(a) => [σ2 / (1 - a^2)]])
 
     @test functions_match((t) -> kernel(candidate_kernel, 0.0, t), target_cov)
+
+    general_A = [0.52 -0.32; -0.80 0.32]
+    general_Q = [3.58 1.78; 1.78 4.56]
+    general_H = [5.43 -0.67;]
+    any([abs(z) > 1 for z in eigen(general_A).values]) && error("A matrix should not have poles outside the unit circle; found $(eigen(general_A).values) with magnitude $([abs(z) for z in eigen(general_A).values])")
+    det(general_Q) <= 0 && error("Q must be positive definite.")
+
+    general_ssm = SSM(general_A, general_Q, general_H)
+    general_kernel = ssm2GPKernel(general_ssm)
+    stationary_σ2 = only(general_H * lyapd(general_A, general_Q) * general_H')
+
+    @test functions_match((t) -> kernel(general_kernel, 0.0, t), (t) -> stationary_σ2 * general_H * exp(general_A * t) * general_H')
 end

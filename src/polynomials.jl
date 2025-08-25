@@ -85,7 +85,7 @@ I0(cpe::CompoundPolynomialExp, t) = integrate(cpe)(t)
 I1(cpe::CompoundPolynomialExp, t) = integrate(cpe * Polynomial([0, 1]))(t)
 
 
-materntocpe(ν, ρ, σ2) = materntocpe(MaternGP(ν, ρ, σ2))
+materntocpe(ν::T, ρ::T, σ2::T) where T <: Number = materntocpe(MaternGP(ν, ρ, σ2))
 # In the specific case when ν = p + 0.5 (p ∈ Z), the Matern kernel can be evaluated exactly as a CompoundPolynomialExp
 function materntocpe(gp::MaternGP)
     !isinteger(gp.ν - 0.5) && error("Provided Matern kernel does not have a finite CPE kernel.")
@@ -116,7 +116,7 @@ function cpetomaternmixture(cpe::CompoundPolynomialExp)
 
             temp_poly -= σ2 * base_poly
 
-            matern_mixture[next_mixture_ind] = MaternGP(ν, ρ, σ2)
+            matern_mixture[next_mixture_ind] = MaternGP{ComplexF64}(ν, ρ, σ2)
             next_mixture_ind += 1
         end
     end
@@ -156,7 +156,7 @@ function fit_cov(ssm::SSM)
         # If the current eigenvalue is the same as the previous one, increase the multiplicity, otherwise reset to 0
         mult = Base.isapprox(eig, prev_eigen, rtol=1E-4) ? (mult + 1) : 0
 
-        basis[ind] = PolynomialExp(onehot(mult + 1), -log(eig))
+        basis[ind] = PolynomialExp(onehot(mult + 1), -log(Complex(eig)))
 
         prev_eigen = eig
     end
