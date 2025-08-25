@@ -58,7 +58,7 @@ end
 Base.convert(::Type{CompoundPolynomialExp}, x::Float64) = CompoundPolynomialExp(Dict([(0, Polynomial([x]))]))
 Base.convert(::Type{CompoundPolynomialExp}, pe::PolynomialExp) = CompoundPolynomialExp(pe)
 
-# Convenient function for calculating n! / k!
+# Convenient function for calculating n! / k! in some of the integral terms to follow
 factorial_ratio(n, k) = factorial(n) / factorial(k)
 
 # Evaluate the integral of x^n exp(-beta x) for beta != 0
@@ -71,19 +71,22 @@ function integrate(pe::PolynomialExp)
     beta = pe.beta
     poly = pe.polynomial
 
+    # If beta = 0, the PolynomialExp is just a polynomial, so standard polynomial integration is sufficient
     iszero(beta) && return CompoundPolynomialExp([beta => Polynomials.integrate(poly)])
 
+    # Integrate the PolynomialExp term by term, given that x^n exp(-beta x) can be integrated exactly
     sum(poly .* [integrated_monomial(n, beta) for n in 0:degree(pe)])
 end
 
 
-integrate(cpe::CompoundPolynomialExp) = sum([integrate(PolynomialExp(poly, beta)) for (beta, poly) in cpe.polynomials])
+integrate(cpe::CompoundPolynomialExp) = sum([integrate(PolynomialExp(poly, beta)) for (beta, poly) in cpe.polynomials]) # Integrate the CompoundPolynomialExp term by term
 
 I0(cpe::CompoundPolynomialExp, t) = integrate(cpe)(t)
 I1(cpe::CompoundPolynomialExp, t) = integrate(cpe * Polynomial([0, 1]))(t)
 
 
 materntocpe(ν, ρ, σ2) = materntocpe(MaternGP(ν, ρ, σ2))
+# In the specific case when ν = p + 0.5 (p ∈ Z), the Matern kernel can be evaluated exactly as a CompoundPolynomialExp
 function materntocpe(gp::MaternGP)
     !isinteger(gp.ν - 0.5) && error("Provided Matern kernel does not have a finite CPE kernel.")
 
@@ -95,6 +98,7 @@ function materntocpe(gp::MaternGP)
     CompoundPolynomialExp([beta => const_factor * Polynomial(base_coefs)])
 end
 
+# Determine a Matern Mixture with the same closed-form as a given CPE using a simple form of Gaussian elimination in the space of PolynomialExps
 function cpetomaternmixture(cpe::CompoundPolynomialExp)
     poly_degs = [Polynomials.degree(poly) for (beta, poly) in cpe.polynomials]
     num_terms = sum(poly_degs .+ 1)
@@ -136,7 +140,7 @@ struct SSM{T}
 end
 
 
-
+# Evaluate the SSM Cov for N time steps. Since the Cov is known to have the form of a CPE, the exact coefficients can be evaluated by solving a system of linear equations.
 function fit_cov(ssm::SSM)
     size(ssm.H)[1] != 1 && error("SSM needs to have one output for covariance matching to work.")
     eigen_vals = eigen(ssm.A).values
@@ -170,9 +174,10 @@ function fit_cov(ssm::SSM)
         ssm_cov = ssm.A * ssm_cov
     end
 
-    coefs = inv(M' * M) * M' * v 
+    coefs = inv(M) * v 
 
     sum(coefs .* basis)
 end
 
+# Since the SSM Cov is a CPE, and a CPE is a Matern Mixture, the SSM Mixture is a Matern Mixture
 ssm2GPKernel(ssm::SSM) = cpetomaternmixture(fit_cov(ssm))
