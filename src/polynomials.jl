@@ -151,11 +151,13 @@ function fit_cov(ssm::SSM)
     basis = Vector{CompoundPolynomialExp}(undef, N)
 
     prev_eigen = -Inf
-    mult = 0
+    mult = Inf
     for (ind, eig) in enumerate(eigen_vals)
+        # If the current eigenvalue is the same as the previous one, increase the multiplicity, otherwise reset to 0
+        mult = Base.isapprox(eig, prev_eigen, rtol=1E-4) ? (mult + 1) : 0
+
         basis[ind] = PolynomialExp(onehot(mult + 1), -log(eig))
 
-        mult = Base.isapprox(eig, prev_eigen, rtol=1E-4) ? (mult + 1) : 0
         prev_eigen = eig
     end
 
