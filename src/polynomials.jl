@@ -140,6 +140,8 @@ function fit_cov(ssm::SSM)
 
     onehot(n) = [i == n ? 1 : 0 for i in 1:n]
 
+    N = minimum(size(ssm.A))
+
     prev_eigen = -Inf
     mult = 0
     basis = Vector{PolynomialExp}()
@@ -152,13 +154,12 @@ function fit_cov(ssm::SSM)
         end
         prev_eigen = eig
     end
-    N = 10
 
-    M = zeros((N, length(basis)))
+    M = zeros((N, N))
     v = zeros((N,1))
 
     process_σ2 = (ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H')[1]
-    ssm_cov = process_σ2 * ssm.A #Matrix(1.0I, length(basis), length(basis))
+    ssm_cov = process_σ2 * ssm.A
 
     for t in 1:N
         v[t] = (ssm.H * ssm_cov * ssm.H')[1]

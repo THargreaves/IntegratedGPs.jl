@@ -286,8 +286,6 @@ end
     @test isequal(materntocpe(gp_p2), target_p2)
 
 
-
-
     ν = 5.5
     ρ = 3.2
     σ2 = 4.5
@@ -301,6 +299,7 @@ end
 @testitem "CPE to Matern Mixture" begin
     using IntegratedMaternGPs
     
+    import Base: isapprox
     
     CPE = CompoundPolynomialExp
 
