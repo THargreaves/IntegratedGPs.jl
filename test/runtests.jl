@@ -371,3 +371,19 @@ end
     
     # TODO: Implement the case corresponding to complex Matern arguments
 end
+
+@testitem "Matern kernel case distinction" begin
+    using IntegratedMaternGPs
+
+    # Test if the Matern GPs are separated into cases when ν = p + 0.5
+    ν1 = 1.6
+    ν2 = 1.5
+    ρ = 0.8
+    σ2 = 5.4
+    gp1 = MaternGP(ν1, ρ, σ2)
+    gp2 = MaternGP(ν2, ρ, σ2)
+
+    @test typeof(gp1) <: MaternGP && isa(gp1, GeneralMaternGP)
+    @test typeof(gp2) <: MaternGP && isa(gp2, CPEMaternGP)
+
+end

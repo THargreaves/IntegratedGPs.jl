@@ -25,14 +25,6 @@ function kernel(gp_mixture::Vector{T}, s, t) where T <: GPKernel
     sum([kernel(gp, s, t) for gp in gp_mixture])
 end
 
-function I0(gp::GPKernel, t)
-    hquadrature((x) -> kernel(gp, 0, x), 0.0, t)
-end
-
-function I1(gp::GPKernel, t)
-    hquadrature((x) -> x * kernel(gp, 0, x), 0.0, t)
-end
-
 
 function I0(gp::IntegratedGPKernel, t)
     get!(gp.I0_cache, t) do
@@ -91,9 +83,7 @@ function CPEMaternGP(ν, ρ, σ2)
     CPEMaternGP(ν, ρ, σ2, cpe)
 end
 
-function MaternGP(ν, ρ, σ2) 
-    return GeneralMaternGP(ν, ρ, σ2)
-end
+MaternGP(ν, ρ, σ2) = isinteger(ν - 0.5) ? CPEMaternGP(ν, ρ, σ2) : GeneralMaternGP(ν, ρ, σ2)
 
 isapprox(a::GeneralMaternGP, b::GeneralMaternGP; rtol=1E-8) = isapprox(a.ν,  b.ν;  rtol) && 
                                                 isapprox(a.ρ,  b.ρ;  rtol) && 
