@@ -70,23 +70,19 @@ Base.convert(::Type{CompoundPolynomialExp}, pe::PolynomialExp) = CompoundPolynom
 # Convenient function for calculating n! / k!
 factorial_ratio(n, k) = factorial(n) / factorial(k)
 
+# Evaluate the integral of x^n exp(-beta x) for beta != 0
+integrated_monomial(n, beta) = CompoundPolynomialExp([  
+                                                        0 => [beta^(-n - 1)], 
+                                                        beta => [factorial_ratio(n, n_min_i) / beta^(n - n_min_i + 1) for n_min_i in 0:n]
+                                                    ])
+
 function integrate(pe::PolynomialExp)
-    res = zero(CompoundPolynomialExp)
     beta = pe.beta
     poly = pe.polynomial
 
-    if beta == 0
-        res += PolynomialExp(Polynomials.integrate(poly), beta)
-    else
-        for n in 0:degree(pe)
-            new_poly = Polynomial([
-                factorial_ratio(n, n_min_i) / beta^(n - n_min_i + 1) for n_min_i in 0:n
-            ])
-            res += PolynomialExp(poly[n] * new_poly, beta)
-            res += poly[n] * oneunit(PolynomialExp) / beta^(n + 1)
-        end
-    end
-    return res
+    iszero(beta) && return CompoundPolynomialExp([beta => Polynomials.integrate(poly)])
+
+    sum(poly .* [integrated_monomial(n, beta) for n in 0:degree(pe)])
 end
 
 
@@ -109,7 +105,7 @@ end
 function cpetomaternmixture(cpe::CompoundPolynomialExp)
     poly_degs = [Polynomials.degree(poly) for (beta, poly) in cpe.polynomials]
     num_terms = sum(poly_degs .+ 1)
-    matern_mixture = [MaternGP(0.0, 0.0, 0.0) for _ in 1:num_terms]
+    matern_mixture = Vector{MaternGP}(undef, num_terms)
     next_mixture_ind = 1
     for (ind, (beta, poly)) in enumerate(cpe.polynomials)
         temp_poly = poly 
@@ -128,8 +124,9 @@ function cpetomaternmixture(cpe::CompoundPolynomialExp)
             next_mixture_ind += 1
         end
     end
+    (next_mixture_ind != num_terms + 1) && error("Matern mixture vector has not been filled up.")
 
-    # Reduce the 
+    # Reduce the mixture to only non-trivial components
     filter((gp::MaternGP) -> !iszero(gp.σ2), matern_mixture)
 end
 
@@ -140,10 +137,10 @@ struct SSM{T}
     H::Matrix{T}
 
     SSM(A::Matrix{T}, Q::Matrix{T}, H::Matrix{T}) where T = (!(length(size(A)) == 2 && length(size(Q)) == 2 && length(size(H)) == 2) && error("All provided matrices must be 2-dimensional; provided A: $(size(A)) and Q: $(size(Q)) and H: $(size(H))")) ||
-                                                    (!(size(Q)[1] == size(Q)[2]) && error("Q must be a square matrix; provided size is $(size(Q)).")) ||
-                                                    (!(size(A)[2] == size(Q)[1]) && error("A and Q must have compatible sizes; provided $(size(A)) and $(size(Q))")) ||
-                                                    (!(size(H)[2] == size(A)[1]) && error("H and A must have compatible sizes; provided $(size(H)) and $(size(A))")) ||
-                                                    new{T}(A, Q, H)
+                                                            (!(size(Q)[1] == size(Q)[2]) && error("Q must be a square matrix; provided size is $(size(Q)).")) ||
+                                                            (!(size(A)[2] == size(Q)[1]) && error("A and Q must have compatible sizes; provided $(size(A)) and $(size(Q))")) ||
+                                                            (!(size(H)[2] == size(A)[1]) && error("H and A must have compatible sizes; provided $(size(H)) and $(size(A))")) ||
+                                                            new{T}(A, Q, H)
 end
 
 
@@ -155,7 +152,7 @@ function fit_cov(ssm::SSM)
     onehot(n::Int) = [i == n ? 1 : 0 for i in 1:n]
 
     N = minimum(size(ssm.A))
-    basis = zeros(CompoundPolynomialExp, N)
+    basis = Vector{CompoundPolynomialExp}(undef, N)
 
     prev_eigen = -Inf
     mult = 0
