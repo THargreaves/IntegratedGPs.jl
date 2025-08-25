@@ -322,7 +322,7 @@ end
     @test functions_match((t) -> kernel(candidate_p2, 0.0, t), (t) -> kernel(target_p2, 0.0, t))
 end
 
-@testitem "SSM to CPE" begin
+@testitem "SSM to Matern Mixture" begin
     using IntegratedMaternGPs
 
     import Base: isapprox
