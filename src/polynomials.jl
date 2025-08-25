@@ -81,8 +81,8 @@ end
 
 integrate(cpe::CompoundPolynomialExp) = sum([integrate(PolynomialExp(poly, beta)) for (beta, poly) in cpe.polynomials]) # Integrate the CompoundPolynomialExp term by term
 
-I0(cpe::CompoundPolynomialExp, t) = integrate(cpe)(t)
-I1(cpe::CompoundPolynomialExp, t) = integrate(cpe * Polynomial([0, 1]))(t)
+I0_form(cpe::CompoundPolynomialExp) = integrate(cpe)
+I1_form(cpe::CompoundPolynomialExp) = integrate(cpe * Polynomial([0, 1]))
 
 
 materntocpe(gp::MaternGP) = materntocpe(gp.ν, gp.ρ, gp.σ2)

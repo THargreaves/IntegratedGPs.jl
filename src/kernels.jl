@@ -47,6 +47,30 @@ function I1(gp::IntegratedGPKernel, t)
 end
 I1(gp::IntegratedGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
+
+function kernel(gp::IntegratedGPKernel, s, t)
+    # Special case where s = t — only middle integral is non-zero
+    if s == t
+        return 2s * I0(gp, s) - 2I1(gp, s)
+    end
+
+    Δ = abs(s - t)
+    m = min(s, t)
+    M = max(s, t)
+
+    # Compute component integrals (potentially using LRU cache)
+    I0_Δ, I0_m, I0_M = I0(gp, Δ), I0(gp, m), I0(gp, M)
+    I1_Δ, I1_m, I1_M = I1(gp, Δ), I1(gp, m), I1(gp, M)
+
+    # Combine over the three piecewise integral regions
+    Ia = 2m * I0_Δ - I1_Δ
+    Ib = (s + t) * (I0_m - I0_Δ) - 2 * (I1_m - I1_Δ)
+    Ic = M * (I0_M - I0_m) - (I1_M - I1_m)
+
+    return Ia + Ib + Ic
+end
+
+
 abstract type MaternGP <: StationaryGPKernel end;
 
 struct GeneralMaternGP{T1, T2, T3} <: MaternGP
@@ -117,28 +141,6 @@ function IntegratedGeneralMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where 
     return IntegratedGeneralMaternGP{T}(ν, ρ, σ2, C0, C1_const, C1_bessel, I0_cache, I1_cache)
 end
 
-function kernel(gp::IntegratedGPKernel, s, t)
-    # Special case where s = t — only middle integral is non-zero
-    if s == t
-        return 2s * I0(gp, s) - 2I1(gp, s)
-    end
-
-    Δ = abs(s - t)
-    m = min(s, t)
-    M = max(s, t)
-
-    # Compute component integrals (potentially using LRU cache)
-    I0_Δ, I0_m, I0_M = I0(gp, Δ), I0(gp, m), I0(gp, M)
-    I1_Δ, I1_m, I1_M = I1(gp, Δ), I1(gp, m), I1(gp, M)
-
-    # Combine over the three piecewise integral regions
-    Ia = 2m * I0_Δ - I1_Δ
-    Ib = (s + t) * (I0_m - I0_Δ) - 2 * (I1_m - I1_Δ)
-    Ic = M * (I0_M - I0_m) - (I1_M - I1_m)
-
-    return Ia + Ib + Ic
-end
-
 function _I0(gp::IntegratedGeneralMaternGP{T}, t) where {T}
     ν = gp.ν
     ρ = gp.ρ
@@ -162,6 +164,35 @@ function _I1(gp::IntegratedGeneralMaternGP{T}, t) where {T}
     x = sqrt(2ν) * t / ρ
     return gp.C1_const - gp.C1_bessel * x^(ν + 1) * besselk(ν + 1, x)
 end
+
+struct IntegratedCPEMaternGP{T} <: IntegratedGPKernel
+    ν::T
+    ρ::T
+    σ2::T
+
+    # Store the CPE closed-forms for I0 and I1 
+    I0_cpe::CompoundPolynomialExp
+    I1_cpe::CompoundPolynomialExp
+
+    # LRU caches for evaluations of I0 and I1
+    I0_cache::LRU{T,T}
+    I1_cache::LRU{T,T}
+end
+
+function IntegratedCPEMaternGP(gp::CPEMaternGP; cache_size=1000) where {T}
+    I0_cpe = I0_form(gp.cpe)
+    I1_cpe = I1_form(gp.cpe)
+
+    I0_cache = LRU{T,T}(; maxsize=cache_size)
+    I1_cache = LRU{T,T}(; maxsize=cache_size)
+    return IntegratedCPEMaternGP{T}(gp.ν, gp.ρ, gp.σ2, I0_cpe, I1_cpe, I0_cache, I1_cache)
+end
+
+_I0(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I0_cpe(t)
+_I1(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I1_cpe(t)
+
+
+
 
 function windowed_cholesky_update!(F::Cholesky, ks::AbstractVector)
     """
