@@ -3,21 +3,22 @@ import SpecialFunctions: gamma
 import Struve: struvel
 using LRUCache
 
-export MaternGP, IntegratedMaternGP, kernel
+export MaternGP, IntegratedGeneralMaternGP, kernel
 export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
 abstract type GPKernel end
 abstract type StationaryGPKernel <: GPKernel end
+abstract type IntegratedGPKernel <: GPKernel end
 
-struct IntegratedGPKernel <: GPKernel
-    base_kernel::GPKernel
+struct GeneralIntegratedGPKernel <: IntegratedGPKernel
+    base_kernel::StationaryGPKernel
 end
 
 function kernel(gp::GPKernel, s, t)
     error("GP Kernel has not been implemented.")
 end
-function kernel(igp::IntegratedGPKernel, s, t)
+function kernel(igp::GeneralIntegratedGPKernel, s, t)
     return hcubature((s, t) -> kernel(igp.base_kernel, s, t), [0.0, 0.0], [s, t])
 end
 function kernel(gp_mixture::Vector{T}, s, t) where T <: GPKernel
@@ -33,17 +34,48 @@ function I1(gp::GPKernel, t)
 end
 
 
-struct MaternGP{T1, T2, T3} <: StationaryGPKernel
+function I0(gp::IntegratedGPKernel, t)
+    get!(gp.I0_cache, t) do
+        _I0(gp, t)
+    end
+end
+
+function I1(gp::IntegratedGPKernel, t)
+    get!(gp.I1_cache, t) do
+        _I1(gp, t)
+    end
+end
+I1(gp::IntegratedGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
+
+abstract type MaternGP <: StationaryGPKernel end;
+
+struct GeneralMaternGP{T1, T2, T3} <: MaternGP
     ν::T1
     ρ::T2
     σ2::T3
 end
 
-isapprox(a::MaternGP, b::MaternGP; rtol=1E-8) = isapprox(a.ν,  b.ν;  rtol) && 
+struct CPEMaternGP <: MaternGP
+    ν::T1
+    ρ::T2
+    σ2::T3
+    cpe::CompoundPolynomialExp
+end
+
+function CPEMaternGP(ν, ρ, σ2)
+    cpe = materntocpe(ν, ρ, σ2)
+    CPEMaternGP(ν, ρ, σ2, cpe)
+end
+
+function MaternGP(ν, ρ, σ2) 
+    return GeneralMaternGP(ν, ρ, σ2)
+end
+
+isapprox(a::GeneralMaternGP, b::GeneralMaternGP; rtol=1E-8) = isapprox(a.ν,  b.ν;  rtol) && 
                                                 isapprox(a.ρ,  b.ρ;  rtol) && 
                                                 isapprox(a.σ2, b.σ2; rtol)
 
-function kernel(gp::MaternGP, s, t)
+function kernel(gp::GeneralMaternGP, s, t)
     ν = gp.ν
     ρ = gp.ρ
     σ2 = gp.σ2
@@ -59,7 +91,9 @@ function kernel(gp::MaternGP, s, t)
     end
 end
 
-struct IntegratedMaternGP{T} <: GPKernel
+kernel(gp::CPEMaternGP, s, t) = gp.cpe(abs(s - t))
+
+struct IntegratedGeneralMaternGP{T} <: IntegratedGPKernel
     ν::T
     ρ::T
     σ2::T
@@ -72,7 +106,7 @@ struct IntegratedMaternGP{T} <: GPKernel
     I1_cache::LRU{T,T}
 end
 
-function IntegratedMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
+function IntegratedGeneralMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
     # Compute constants
     C0 = σ2 * sqrt(π) * gamma(ν + 0.5) / gamma(ν)
     C1_const = σ2 * ρ^2
@@ -80,10 +114,10 @@ function IntegratedMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
 
     I0_cache = LRU{T,T}(; maxsize=cache_size)
     I1_cache = LRU{T,T}(; maxsize=cache_size)
-    return IntegratedMaternGP{T}(ν, ρ, σ2, C0, C1_const, C1_bessel, I0_cache, I1_cache)
+    return IntegratedGeneralMaternGP{T}(ν, ρ, σ2, C0, C1_const, C1_bessel, I0_cache, I1_cache)
 end
 
-function kernel(gp::IntegratedMaternGP, s, t)
+function kernel(gp::IntegratedGPKernel, s, t)
     # Special case where s = t — only middle integral is non-zero
     if s == t
         return 2s * I0(gp, s) - 2I1(gp, s)
@@ -105,13 +139,7 @@ function kernel(gp::IntegratedMaternGP, s, t)
     return Ia + Ib + Ic
 end
 
-function I0(gp::IntegratedMaternGP, t)
-    get!(gp.I0_cache, t) do
-        _I0(gp, t)
-    end
-end
-
-function _I0(gp::IntegratedMaternGP{T}, t) where {T}
+function _I0(gp::IntegratedGeneralMaternGP{T}, t) where {T}
     ν = gp.ν
     ρ = gp.ρ
 
@@ -124,13 +152,7 @@ function _I0(gp::IntegratedMaternGP{T}, t) where {T}
     )
 end
 
-function I1(gp::IntegratedMaternGP, t)
-    get!(gp.I1_cache, t) do
-        _I1(gp, t)
-    end
-end
-
-function _I1(gp::IntegratedMaternGP{T}, t) where {T}
+function _I1(gp::IntegratedGeneralMaternGP{T}, t) where {T}
     ν = gp.ν
     ρ = gp.ρ
 
@@ -140,7 +162,6 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     x = sqrt(2ν) * t / ρ
     return gp.C1_const - gp.C1_bessel * x^(ν + 1) * besselk(ν + 1, x)
 end
-I1(gp::IntegratedMaternGP, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
 function windowed_cholesky_update!(F::Cholesky, ks::AbstractVector)
     """

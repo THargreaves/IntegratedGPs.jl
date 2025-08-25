@@ -85,16 +85,16 @@ I0(cpe::CompoundPolynomialExp, t) = integrate(cpe)(t)
 I1(cpe::CompoundPolynomialExp, t) = integrate(cpe * Polynomial([0, 1]))(t)
 
 
-materntocpe(ν, ρ, σ2) = materntocpe(MaternGP(ν, ρ, σ2))
+materntocpe(gp::MaternGP) = materntocpe(gp.ν, gp.ρ, gp.σ2)
 # In the specific case when ν = p + 0.5 (p ∈ Z), the Matern kernel can be evaluated exactly as a CompoundPolynomialExp
-function materntocpe(gp::MaternGP)
-    !isinteger(gp.ν - 0.5) && error("Provided Matern kernel does not have a finite CPE kernel.")
+function materntocpe(ν, ρ, σ2)
+    #!isinteger(gp.ν - 0.5) && error("Provided Matern kernel does not have a finite CPE kernel.")
 
-    p = Int(gp.ν - 0.5)
+    p = Int(ν - 0.5)
 
-    beta = sqrt(2 * gp.ν) / gp.ρ
-    const_factor = gp.σ2 / factorial_ratio(2 * p, p)
-    base_coefs = [binomial(p, p_min_i) * factorial_ratio(p + (p - p_min_i), p) * (2 * sqrt(2 * gp.ν) / gp.ρ)^p_min_i for p_min_i in 0:p]
+    beta = sqrt(2ν) / ρ
+    const_factor = σ2 / factorial_ratio(2p, p)
+    base_coefs = [binomial(p, p_min_i) * factorial_ratio(p + (p - p_min_i), p) * (2 * sqrt(2ν) / ρ)^p_min_i for p_min_i in 0:p]
     CompoundPolynomialExp([beta => const_factor * Polynomial(base_coefs)])
 end
 
