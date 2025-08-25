@@ -336,8 +336,5 @@ end
     candidate_kernel = ssm2GPKernel(ar_1)
     target_cov = CPE([-log(a) => [σ2 / (1 - a^2)]])
 
-    println([kernel(candidate_kernel, 0.0, t) for t in 0:5])
-    println([target_cov(t) for t in 0:5])
-
     @test functions_match((t) -> kernel(candidate_kernel, 0.0, t), target_cov)
 end

@@ -19,19 +19,21 @@ end
 PolynomialExp(arr::Vector{T}, beta::Number) where T <: Number = PolynomialExp(Polynomial(arr), beta)
 (pe::PolynomialExp)(x) = pe.polynomial(x) * exp(-pe.beta * x);
 
-oneunit(PolynomialExp) = PolynomialExp(Polynomial([1.0]), 0.0)
+Base.oneunit(::Type{PolynomialExp}) = PolynomialExp([1.0], 0.0)
+Base.zero(::Type{PolynomialExp}) = PolynomialExp([0], 0)
 Base.:*(c::Number, pe::PolynomialExp) = PolynomialExp(c * pe.polynomial, pe.beta);
+Base.:*(c::Number, cpe::CompoundPolynomialExp) = CompoundPolynomialExp([beta => c * poly for (beta, poly) in cpe.polynomials]);
 Base.:/(pe::PolynomialExp, c::Number) = PolynomialExp(pe.polynomial / c, pe.beta);
 degree(pe::PolynomialExp) = Polynomials.degree(pe.polynomial)
 
 (cpe::CompoundPolynomialExp)(x) = sum(PolynomialExp(poly, beta)(x) for (beta, poly) in cpe.polynomials)
 
-zero(CompoundPolynomialExp) = CompoundPolynomialExp(Dict{Number, Polynomial}())
 CompoundPolynomialExp(itr::Vector{Pair{T, P}}) where {T <: Number, P <: Polynomial} = CompoundPolynomialExp(Dict(itr))
 CompoundPolynomialExp(itr::Vector{Pair{T, P}}) where {T <: Number, P <: Vector} = CompoundPolynomialExp(Dict([(k, Polynomial(v)) for (k, v) in itr]))
 CompoundPolynomialExp(pe::PolynomialExp) = CompoundPolynomialExp([pe.beta => pe.polynomial])
 
 CompoundPolynomialExp(c::Number) = CompoundPolynomialExp([0 => Polynomial([c])])
+Base.zero(::Type{CompoundPolynomialExp}) = CompoundPolynomialExp([0 => [0]])
 
 Base.isequal(a::CompoundPolynomialExp, b::CompoundPolynomialExp) = issetequal(keys(a.polynomials), keys(b.polynomials)) && all([Polynomials.isapprox(v, b.polynomials[k], rtol=1E-8) for (k, v) in a.polynomials])
 
@@ -65,7 +67,7 @@ end
 Base.convert(::Type{CompoundPolynomialExp}, x::Float64) = CompoundPolynomialExp(Dict([(0, Polynomial([x]))]))
 Base.convert(::Type{CompoundPolynomialExp}, pe::PolynomialExp) = CompoundPolynomialExp(pe)
 
-# Calculate n! / k! where n >= k
+# Convenient function for calculating n! / k!
 factorial_ratio(n, k) = factorial(n) / factorial(k)
 
 function integrate(pe::PolynomialExp)
@@ -94,9 +96,9 @@ I0(cpe::CompoundPolynomialExp, t) = integrate(cpe)(t)
 I1(cpe::CompoundPolynomialExp, t) = integrate(cpe * Polynomial([0, 1]))(t)
 
 function materntocpe(gp::MaternGP)
-    !Base.isapprox(gp.ν % 1.0, 0.5; rtol=1E-8) && error("Provided Matern kernel does not have a finite CPE kernel.")
+    !isinteger(gp.ν - 0.5) && error("Provided Matern kernel does not have a finite CPE kernel.")
 
-    p::Int = floor(gp.ν)
+    p = Int(gp.ν - 0.5)
 
     beta = sqrt(2 * gp.ν) / gp.ρ
     const_factor = gp.σ2 / factorial_ratio(2 * p, p)
@@ -105,26 +107,30 @@ function materntocpe(gp::MaternGP)
 end
 
 function cpetomaternmixture(cpe::CompoundPolynomialExp)
-    res = Vector{MaternGP}()
-    for (beta, poly) in cpe.polynomials
-        new_poly = poly 
-        while sum(new_poly[0:end].^2) > 1E-8
-            p = Polynomials.degree(new_poly)
+    poly_degs = [Polynomials.degree(poly) for (beta, poly) in cpe.polynomials]
+    num_terms = sum(poly_degs .+ 1)
+    matern_mixture = [MaternGP(0.0, 0.0, 0.0) for _ in 1:num_terms]
+    next_mixture_ind = 1
+    for (ind, (beta, poly)) in enumerate(cpe.polynomials)
+        temp_poly = poly 
+        for p in poly_degs[ind]:-1:0
             ν = p + 0.5
             ρ = sqrt(2ν) / beta
 
             matern_base = MaternGP(ν, ρ, 1.0)
             base_cpe = materntocpe(matern_base)
-            base_poly = base_cpe.polynomials[beta]
-            σ2 = new_poly[p] / base_poly[p]
-            base_poly *= σ2
+            base_poly = only(values(base_cpe.polynomials))
+            σ2 = temp_poly[p] / base_poly[p]
 
-            new_poly -= base_poly
+            temp_poly -= σ2 * base_poly
 
-            push!(res, MaternGP(ν, ρ, σ2))
+            matern_mixture[next_mixture_ind] = MaternGP(ν, ρ, σ2)
+            next_mixture_ind += 1
         end
     end
-    res
+
+    # Reduce the 
+    filter((gp::MaternGP) -> !iszero(gp.σ2), matern_mixture)
 end
 
 
@@ -132,37 +138,42 @@ struct SSM{T}
     A::Matrix{T}
     Q::Matrix{T}
     H::Matrix{T}
+
+    SSM(A::Matrix{T}, Q::Matrix{T}, H::Matrix{T}) where T = (!(length(size(A)) == 2 && length(size(Q)) == 2 && length(size(H)) == 2) && error("All provided matrices must be 2-dimensional; provided A: $(size(A)) and Q: $(size(Q)) and H: $(size(H))")) ||
+                                                    (!(size(Q)[1] == size(Q)[2]) && error("Q must be a square matrix; provided size is $(size(Q)).")) ||
+                                                    (!(size(A)[2] == size(Q)[1]) && error("A and Q must have compatible sizes; provided $(size(A)) and $(size(Q))")) ||
+                                                    (!(size(H)[2] == size(A)[1]) && error("H and A must have compatible sizes; provided $(size(H)) and $(size(A))")) ||
+                                                    new{T}(A, Q, H)
 end
+
+
 
 function fit_cov(ssm::SSM)
     size(ssm.H)[1] != 1 && error("SSM needs to have one output for covariance matching to work.")
     eigen_vals = eigen(ssm.A).values
 
-    onehot(n) = [i == n ? 1 : 0 for i in 1:n]
+    onehot(n::Int) = [i == n ? 1 : 0 for i in 1:n]
 
     N = minimum(size(ssm.A))
+    basis = zeros(CompoundPolynomialExp, N)
 
     prev_eigen = -Inf
     mult = 0
-    basis = Vector{PolynomialExp}()
-    for eig in eigen_vals
-        push!(basis, PolynomialExp(onehot(mult + 1), -log(eig)))
-        if Base.isapprox(eig, prev_eigen, rtol=1E-4)
-            mult = 0
-        else
-            mult += 1
-        end
+    for (ind, eig) in enumerate(eigen_vals)
+        basis[ind] = PolynomialExp(onehot(mult + 1), -log(eig))
+
+        mult = Base.isapprox(eig, prev_eigen, rtol=1E-4) ? (mult + 1) : 0
         prev_eigen = eig
     end
 
     M = zeros((N, N))
     v = zeros((N,1))
 
-    process_σ2 = (ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H')[1]
+    process_σ2 = only(ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H')
     ssm_cov = process_σ2 * ssm.A
 
     for t in 1:N
-        v[t] = (ssm.H * ssm_cov * ssm.H')[1]
+        v[t] = only(ssm.H * ssm_cov * ssm.H')
         for (ind, pe) in enumerate(basis) 
             M[t,ind] = pe(t)
         end
@@ -172,9 +183,7 @@ function fit_cov(ssm::SSM)
 
     coefs = inv(M' * M) * M' * v 
 
-    CompoundPolynomialExp(sum(coefs .* basis))
+    sum(coefs .* basis)
 end
 
-function ssm2GPKernel(ssm::SSM)
-    cpetomaternmixture(fit_cov(ssm))
-end
+ssm2GPKernel(ssm::SSM) = cpetomaternmixture(fit_cov(ssm))
