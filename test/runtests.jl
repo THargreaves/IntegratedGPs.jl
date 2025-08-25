@@ -83,10 +83,127 @@ end
     @test (@allocated windowed_cholesky_update!(F, ks)) == 0
 end
 
+@testitem "Shifting Transition Mean Update" begin
+    using IntegratedMaternGPs
+    using LinearAlgebra
+    using StableRNGs
+
+    n = 10
+    rng = StableRNG(1234)
+
+    f = rand(rng, n)
+    F_sparse = ShiftingTransition(f)
+
+    F_dense = zeros(n, n)
+    F_dense[1, :] = f
+    F_dense[2:end, 1:(end - 1)] .= Matrix(I, n - 1, n - 1)
+
+    # Out-of-place multiplication
+    x = rand(rng, n)
+    y_sparse = F_sparse * x
+    y_dense = F_dense * x
+    @test y_sparse ≈ y_dense
+
+    # In-place multiplication
+    x_sparse = copy(x)
+    mul!(x_sparse, F_sparse, x_sparse)
+    @test x_sparse ≈ y_dense
+end
+
+@testitem "Shifting Transition Covariance Update" begin
+    using IntegratedMaternGPs
+    using LinearAlgebra
+    using StableRNGs
+
+    n = 10
+    rng = StableRNG(1234)
+
+    f = rand(rng, n)
+    F_sparse = ShiftingTransition(f)
+
+    F_dense = zeros(n, n)
+    F_dense[1, :] = f
+    F_dense[2:end, 1:(end - 1)] .= Matrix(I, n - 1, n - 1)
+
+    # Construct symmetric PSD matrix
+    S = rand(rng, n, n)
+    S = Symmetric(S * S' + I)
+
+    # Out-of-place quadratic form
+    C_sparse = quadratic_form(F_sparse, S)
+    C_dense = F_dense * S * F_dense'
+    @test C_sparse ≈ C_dense
+
+    # In-place quadratic form
+    S_sparse = deepcopy(S)
+    quadratic_form!(S_sparse, F_sparse, S_sparse)
+    @test S_sparse ≈ C_dense
+end
+
+@testitem "Expanding Transition Mean Update" begin
+    using IntegratedMaternGPs
+    using LinearAlgebra
+    using StableRNGs
+
+    n = 10
+    rng = StableRNG(1234)
+
+    f = rand(rng, n)
+    F_sparse = ExpandingTransition(f)
+
+    F_dense = zeros(n + 1, n)
+    F_dense[1, :] = f
+    F_dense[2:end, :] .= Matrix(I, n, n)
+
+    # Out-of-place multiplication
+    x = rand(rng, n)
+    y_sparse = F_sparse * x
+    y_dense = F_dense * x
+    @test y_sparse ≈ y_dense
+
+    # In-place multiplication
+    x_sparse = Vector{Float64}(undef, n + 1)
+    x_sparse[2:end] .= x
+    mul!(x_sparse, F_sparse, @view x_sparse[2:end])
+    @test x_sparse ≈ y_dense
+end
+
+@testitem "Expanding Transition Covariance Update" begin
+    using IntegratedMaternGPs
+    using LinearAlgebra
+    using StableRNGs
+
+    n = 10
+    rng = StableRNG(1234)
+
+    f = rand(rng, n)
+    F_sparse = ExpandingTransition(f)
+
+    F_dense = zeros(n + 1, n)
+    F_dense[1, :] = f
+    F_dense[2:end, :] .= Matrix(I, n, n)
+
+    # Construct symmetric PSD matrix
+    S = rand(rng, n, n)
+    S = Symmetric(S * S' + I)
+
+    # Out-of-place quadratic form
+    C_sparse = quadratic_form(F_sparse, S)
+    C_dense = F_dense * S * F_dense'
+    @test C_sparse ≈ C_dense
+
+    # In-place quadratic form
+    S_sparse = Symmetric(zeros(n + 1, n + 1))
+    quadratic_form!(S_sparse, F_sparse, S)
+    @test S_sparse ≈ C_dense
+end
+
 
 @testitem "Basic CPE operations" begin
     using IntegratedMaternGPs
     using Polynomials
+    
+    import Base: isapprox
 
     PE = PolynomialExp
     CPE = CompoundPolynomialExp
@@ -110,7 +227,7 @@ end
     # Test that adding CompoundPolynomialExp terms gives the expected CompoundPolynomialExp
     @test isequal(c, expected_c)
 
-    functions_match(f, g) = all(isapprox(f(x), g(x)) for x in 0:1E-2:5)
+    functions_match(f, g) = all([isapprox(f(x), g(x)) for x in 0:1E-2:5])
 
 
     const_val = 4.0
@@ -131,9 +248,11 @@ end
     using IntegratedMaternGPs
     using HCubature
 
+    import Base: isapprox
+
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all(isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-2:5)
+    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-2:5])
     integrals_match(f::CPE) = functions_match(integrate(f), (x) -> hquadrature((y) -> f(y), 0.0, x)[1])
 
     const_val = 5.345
@@ -149,6 +268,9 @@ end
 
 @testitem "Matern to CPE" begin
     using IntegratedMaternGPs
+    
+    import Base: isapprox
+
     CPE = CompoundPolynomialExp
 
     gp_p0 = MaternGP(0.5, 1.0, 1.0)
@@ -178,19 +300,25 @@ end
 
 @testitem "CPE to Matern Mixture" begin
     using IntegratedMaternGPs
+    
+    import Base: isapprox
+    
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all(isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-2:5)
+    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-2:5])
 
     cpe_p0 = CPE([1 => [1]])
     target_p0 = [MaternGP(0.5, 1.0, 1.0)]
-    @test functions_match((t) -> kernel(cpetomaternmixture(cpe_p0), 0.0, t), (t) -> kernel(target_p0, 0.0, t))
+    candidate_p0 = cpetomaternmixture(cpe_p0)
+    @test functions_match((t) -> kernel(candidate_p0, 0.0, t), (t) -> kernel(target_p0, 0.0, t))
 
     cpe_p1 = CPE([sqrt(3) => [1, sqrt(3)]])
     target_p1 = [MaternGP(1.5, 1.0, 1.0)]
-    @test functions_match((t) -> kernel(cpetomaternmixture(cpe_p1), 0.0, t), (t) -> kernel(target_p1, 0.0, t))
+    candidate_p1 = cpetomaternmixture(cpe_p1)
+    @test functions_match((t) -> kernel(candidate_p1, 0.0, t), (t) -> kernel(target_p1, 0.0, t))
 
     cpe_p2 = CPE([sqrt(5) => [1, sqrt(5), 5 / 3]])
     target_p2 = [MaternGP(2.5, 1.0, 1.0)]
-    @test functions_match((t) -> kernel(cpetomaternmixture(cpe_p2), 0.0, t), (t) -> kernel(target_p2, 0.0, t))
+    candidate_p2 = cpetomaternmixture(cpe_p2)
+    @test functions_match((t) -> kernel(candidate_p2, 0.0, t), (t) -> kernel(target_p2, 0.0, t))
 end
