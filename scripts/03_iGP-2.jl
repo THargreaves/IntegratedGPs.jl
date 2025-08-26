@@ -20,7 +20,7 @@ x1_prior = Normal(5.0, 0.5)
 ν = 1.5
 ρ = 0.8
 σk = 1.2
-gp = IntegratedMaternGP(ν, ρ, σk^2)
+gp = IntegratedGeneralMaternGP(ν, ρ, σk^2)
 
 # Simulation
 τ = 1.0
@@ -31,7 +31,7 @@ SEED = 1234
 rng = MersenneTwister(SEED)
 
 # Filtering
-d = 20
+d = 40
 
 ############################
 #### FORWARD SIMULATION ####
@@ -224,9 +224,11 @@ for k in 3:d
     ts[k - 1] = t_new
 end
 
+# Times are now all relative to the shifting prior time (i.e. constant)
+t_new = d * τ
+
 # Shift window for remaining steps
 for k in (d + 1):K
-    t_new = k * τ
     ks .= kernel.(Ref(gp), ts, t_new)
     k_new = kernel(gp, t_new, t_new)
 
@@ -260,8 +262,6 @@ for k in (d + 1):K
     ks[1:(d - 2)] .= ks[2:(d - 1)]
     ks[d - 1] = k_new
     windowed_cholesky_update!(F, ks)
-    ts[1:(d - 2)] .= ts[2:(d - 1)]
-    ts[d - 1] = t_new
 end
 
 plot!(
