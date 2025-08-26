@@ -3,7 +3,7 @@ import SpecialFunctions: gamma
 import Struve: struvel
 using LRUCache
 
-export MaternGP, IntegratedMaternGP, GeneralMaternGP, IntegratedGeneralMaternGP, CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate
+export MaternGP, IntegratedMaternGP, GeneralMaternGP, IntegratedGeneralMaternGP, CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate, I0, I1
 export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
@@ -45,25 +45,10 @@ I1(gp::IntegratedStationaryGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
 
 function kernel(gp::IntegratedStationaryGPKernel, s, t)
-    # Special case where s = t — only middle integral is non-zero
-    if s == t
-        return 2s * I0(gp, s) - 2I1(gp, s)
-    end
-
     Δ = abs(s - t)
-    m = min(s, t)
-    M = max(s, t)
-
-    # Compute component integrals (potentially using LRU cache)
-    I0_Δ, I0_m, I0_M = I0(gp, Δ), I0(gp, m), I0(gp, M)
-    I1_Δ, I1_m, I1_M = I1(gp, Δ), I1(gp, m), I1(gp, M)
-
-    # Combine over the three piecewise integral regions
-    Ia = 2m * I0_Δ - I1_Δ
-    Ib = (s + t) * (I0_m - I0_Δ) - 2 * (I1_m - I1_Δ)
-    Ic = M * (I0_M - I0_m) - (I1_M - I1_m)
-
-    return Ia + Ib + Ic
+    contribution(x) = x * I0(gp, x) - I1(gp, x)
+    
+    return contribution(s) - contribution(Δ) + contribution(t)
 end
 
 

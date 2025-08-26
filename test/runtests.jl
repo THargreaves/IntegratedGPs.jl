@@ -104,6 +104,27 @@ end
     @test functions_match((t) -> kernel(gp_cpe, 0.0, t), (t) -> kernel(gp_gen, 0.0, t))
 end
 
+@testitem "Matern kernel I0 & I1 verification" begin
+    using IntegratedMaternGPs
+    using HCubature
+
+    import Base: isapprox
+
+    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
+    
+    # Test that the I0 and I1 functions provide the same answers as numerical methods
+    ν = 4.3
+    ρ = 2.1
+    σ2 = 5.3
+
+    gp = MaternGP(ν, ρ, σ2)
+    igp = integrate(gp)
+
+    @test functions_match(t -> I0(igp, t), t -> hquadrature(s -> kernel(gp, 0, s), 0.0, t)[1])
+    @test functions_match(t -> I1(igp, t), t -> hquadrature(s -> s * kernel(gp, 0, s), 0.0, t)[1])
+
+end
+
 @testitem "Integrated Matern Kernel" begin
     using IntegratedMaternGPs
     using HCubature
