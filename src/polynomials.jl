@@ -77,6 +77,7 @@ I1_form(cpe::CompoundPolynomialExp) = integrate(cpe * Polynomial([0, 1]))
 
 
 materntocpe(gp::GeneralMaternGP) = materntocpe(gp.ν, gp.ρ, gp.σ2)
+materntocpe(gp::CPEMaternGP) = gp.cpe
 # In the specific case when ν = p + 0.5 (p ∈ Z), the Matern kernel can be evaluated exactly as a CompoundPolynomialExp
 function materntocpe(ν, ρ, σ2)
     !isinteger(ν - 0.5) && error("Provided Matern kernel does not have a CPE kernel.")
