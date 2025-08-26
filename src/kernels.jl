@@ -76,6 +76,8 @@ struct CPEMaternGP{T1, T2, T3} <: MaternGP
     ρ::T2
     σ2::T3
     cpe::CompoundPolynomialExp
+
+    CPEMaternGP(ν::T1, ρ::T2, σ2::T3, cpe::CompoundPolynomialExp) where {T1, T2, T3} = !isinteger(ν - 0.5) ? error("CPE Matern GP needs ν to be of the form p + 0.5; given $(ν)") : new{T1, T2, T3}(ν, ρ, σ2, cpe) 
 end
 
 function CPEMaternGP(ν, ρ, σ2)

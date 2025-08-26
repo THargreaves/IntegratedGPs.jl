@@ -357,6 +357,7 @@ end
 
     @test functions_match((t) -> kernel(candidate_kernel, 0.0, t), target_cov)
 
+    # Check if some other SSM has the same covariance as its corresponding kernel
     general_A = [0.52 -0.32; -0.20 0.60]
     general_Q = [3.58 1.78; 1.78 4.56]
     general_H = [5.43 -0.67;]
@@ -375,6 +376,10 @@ end
 @testitem "Matern kernel case distinction" begin
     using IntegratedMaternGPs
 
+    import Base: isapprox
+
+    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
+
     # Test if the Matern GPs are separated into cases when ν = p + 0.5
     ν1 = 1.6
     ν2 = 1.5
@@ -385,5 +390,14 @@ end
 
     @test typeof(gp1) <: MaternGP && isa(gp1, GeneralMaternGP)
     @test typeof(gp2) <: MaternGP && isa(gp2, CPEMaternGP)
+
+    # Test if the two Matern GP cases have the same kernel
+    ν = 3.5
+    ρ = 1.2
+    σ2 = 4.6
+    gp_cpe = CPEMaternGP(ν, ρ, σ2)
+    gp_gen = GeneralMaternGP(ν, ρ, σ2)
+
+    @test functions_match((t) -> kernel(gp_cpe, 0.0, t), (t) -> kernel(gp_gen, 0.0, t))
 
 end
