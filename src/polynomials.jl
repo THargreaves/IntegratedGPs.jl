@@ -27,7 +27,7 @@ function (cpe::CompoundPolynomialExp)(x)
     return sum(PolynomialExp(poly, beta)(x) for (beta, poly) in cpe.polynomials)
 end
 
-zero(CompoundPolynomialExp) = CompoundPolynomialExp(Dict{Number,Polynomial}())
+Base.zero(CompoundPolynomialExp) = CompoundPolynomialExp(Dict{Number,Polynomial}())
 function CompoundPolynomialExp(itr::Vector{Pair{T,P}}) where {T<:Number,P<:Polynomial}
     return CompoundPolynomialExp(Dict(itr))
 end
