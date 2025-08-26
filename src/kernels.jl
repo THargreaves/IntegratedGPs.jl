@@ -33,12 +33,14 @@ function I0(gp::IntegratedStationaryGPKernel, t)
         _I0(gp, t)
     end
 end
+_I0(gp::IntegratedStationaryGPKernel, t) = error("The integrated stationary GP _I0 function has not been implemented.") 
 
 function I1(gp::IntegratedStationaryGPKernel, t)
     get!(gp.I1_cache, t) do
         _I1(gp, t)
     end
 end
+_I1(gp::IntegratedStationaryGPKernel, t) = error("The integrated stationary GP _I1 function has not been implemented.")
 I1(gp::IntegratedStationaryGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
 
