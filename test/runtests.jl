@@ -236,7 +236,7 @@ end
     @test functions_match(const_cpe, (x) -> const_val)
 
     # Test that CPEs which are exactly polynomials are evaluated correctly
-    poly_cpe = CPE([0 => [1, 5, -7]])
+    poly_cpe = CPE(0 => [1, 5, -7])
     equiv_poly(x) = 1 + 5 * x - 7 * x^2
     @test functions_match(poly_cpe, equiv_poly)
 
@@ -263,7 +263,7 @@ end
     @test integrals_match(const_cpe)
 
     # Test that polynomials integrate correctly
-    poly_cpe = CPE([0 => [2.3, -5.425, 8.234, 0.987]])
+    poly_cpe = CPE(0 => [2.3, -5.425, 8.234, 0.987])
     @test integrals_match(poly_cpe)
 
     # Test that some more general CPE integral evaluates to the right thing
@@ -282,17 +282,17 @@ end
 
     # The case ν = 0.5 is known exactly, test that it corresponds to the expected expression
     gp_p0 = GeneralMaternGP(0.5, 1.0, 1.0)
-    target_p0 = CPE([1 => [1]])
+    target_p0 = CPE(1 => [1])
     @test isequal(materntocpe(gp_p0), target_p0)
 
     # The case ν = 1.5 is known exactly, test that it corresponds to the expected expression
     gp_p1 = GeneralMaternGP(1.5, 1.0, 1.0)
-    target_p1 = CPE([sqrt(3) => [1, sqrt(3)]])
+    target_p1 = CPE(sqrt(3) => [1, sqrt(3)])
     @test isequal(materntocpe(gp_p1), target_p1)
 
     # The case ν = 2.5 is known exactly, test that it corresponds to the expected expression
     gp_p2 = GeneralMaternGP(2.5, 1.0, 1.0)
-    target_p2 = CPE([sqrt(5) => [1, sqrt(5), 5 / 3]])
+    target_p2 = CPE(sqrt(5) => [1, sqrt(5), 5 / 3])
     @test isequal(materntocpe(gp_p2), target_p2)
 
 
@@ -316,17 +316,17 @@ end
     functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
 
     # Take the known cases of Matern -> CPE and check that the inverse still matches
-    cpe_p0 = CPE([1 => [1]])
+    cpe_p0 = CPE(1 => [1])
     target_p0 = [GeneralMaternGP(0.5, 1.0, 1.0)]
     candidate_p0 = cpetomaternmixture(cpe_p0)
     @test functions_match((t) -> kernel(candidate_p0, 0.0, t), (t) -> kernel(target_p0, 0.0, t))
 
-    cpe_p1 = CPE([sqrt(3) => [1, sqrt(3)]])
+    cpe_p1 = CPE(sqrt(3) => [1, sqrt(3)])
     target_p1 = [GeneralMaternGP(1.5, 1.0, 1.0)]
     candidate_p1 = cpetomaternmixture(cpe_p1)
     @test functions_match((t) -> kernel(candidate_p1, 0.0, t), (t) -> kernel(target_p1, 0.0, t))
 
-    cpe_p2 = CPE([sqrt(5) => [1, sqrt(5), 5 / 3]])
+    cpe_p2 = CPE(sqrt(5) => [1, sqrt(5), 5 / 3])
     target_p2 = [GeneralMaternGP(2.5, 1.0, 1.0)]
     candidate_p2 = cpetomaternmixture(cpe_p2)
     @test functions_match((t) -> kernel(candidate_p2, 0.0, t), (t) -> kernel(target_p2, 0.0, t))
@@ -353,7 +353,7 @@ end
     σ2 = 1.0
     ar_1 = SSM([a;;], [σ2;;], [1.0;;])
     candidate_kernel = ssm2GPKernel(ar_1)
-    target_cov = CPE([-log(a) => [σ2 / (1 - a^2)]])
+    target_cov = CPE(-log(a) => [σ2 / (1 - a^2)])
 
     @test functions_match((t) -> kernel(candidate_kernel, 0.0, t), target_cov)
 

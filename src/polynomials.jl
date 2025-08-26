@@ -1,7 +1,5 @@
 using Polynomials, HCubature, LinearAlgebra, MatrixEquations
 
-import Base: isapprox
-
 export PolynomialExp, CompoundPolynomialExp, SSM
 export +, show, isequal, isapprox
 export integrate, materntocpe, cpetomaternmixture, ssm2GPKernel
@@ -21,10 +19,12 @@ degree(pe::PolynomialExp) = Polynomials.degree(pe.polynomial)
 
 CompoundPolynomialExp(itr::Vector{Pair{T, P}}) where {T <: Number, P <: Polynomial} = CompoundPolynomialExp(Dict(itr))
 CompoundPolynomialExp(itr::Vector{Pair{T, P}}) where {T <: Number, P <: Vector} = CompoundPolynomialExp(Dict([(k, Polynomial(v)) for (k, v) in itr]))
-CompoundPolynomialExp(pe::PolynomialExp) = CompoundPolynomialExp([pe.beta => pe.polynomial])
+CompoundPolynomialExp(p::Pair{T, P}) where {T <: Number, P <: Vector} = CompoundPolynomialExp([p])
+CompoundPolynomialExp(p::Pair{T, P}) where {T <: Number, P <: Polynomial} = CompoundPolynomialExp([p])
+CompoundPolynomialExp(pe::PolynomialExp) = CompoundPolynomialExp(pe.beta => pe.polynomial)
 
-CompoundPolynomialExp(c::Number) = CompoundPolynomialExp([0 => Polynomial([c])])
-Base.zero(::Type{CompoundPolynomialExp}) = CompoundPolynomialExp([0 => [0]])
+CompoundPolynomialExp(c::Number) = CompoundPolynomialExp(0 => Polynomial([c]))
+Base.zero(::Type{CompoundPolynomialExp}) = CompoundPolynomialExp(0 => [0])
 
 Base.isequal(a::CompoundPolynomialExp, b::CompoundPolynomialExp) = issetequal(keys(a.polynomials), keys(b.polynomials)) && all([Polynomials.isapprox(v, b.polynomials[k], rtol=1E-8) for (k, v) in a.polynomials])
 
@@ -76,10 +76,10 @@ I0_form(cpe::CompoundPolynomialExp) = integrate(cpe)
 I1_form(cpe::CompoundPolynomialExp) = integrate(cpe * Polynomial([0, 1]))
 
 
-materntocpe(gp::MaternGP) = materntocpe(gp.ν, gp.ρ, gp.σ2)
+materntocpe(gp::GeneralMaternGP) = materntocpe(gp.ν, gp.ρ, gp.σ2)
 # In the specific case when ν = p + 0.5 (p ∈ Z), the Matern kernel can be evaluated exactly as a CompoundPolynomialExp
 function materntocpe(ν, ρ, σ2)
-    #!isinteger(gp.ν - 0.5) && error("Provided Matern kernel does not have a finite CPE kernel.")
+    !isinteger(ν - 0.5) && error("Provided Matern kernel does not have a CPE kernel.")
 
     p = Int(ν - 0.5)
 
@@ -93,7 +93,7 @@ end
 function cpetomaternmixture(cpe::CompoundPolynomialExp)
     poly_degs = [Polynomials.degree(poly) for (beta, poly) in cpe.polynomials]
     num_terms = sum(poly_degs .+ 1)
-    matern_mixture = Vector{MaternGP}(undef, num_terms)
+    matern_mixture = Vector{CPEMaternGP}(undef, num_terms)
     next_mixture_ind = 1
     for (ind, (beta, poly)) in enumerate(cpe.polynomials)
         temp_poly = poly 
@@ -107,14 +107,14 @@ function cpetomaternmixture(cpe::CompoundPolynomialExp)
 
             temp_poly -= σ2 * base_poly
 
-            matern_mixture[next_mixture_ind] = MaternGP(ν, ρ, σ2)
+            matern_mixture[next_mixture_ind] = CPEMaternGP(ν, ρ, σ2, CompoundPolynomialExp(beta => σ2 * base_poly))
             next_mixture_ind += 1
         end
     end
     (next_mixture_ind != num_terms + 1) && error("Matern mixture vector has not been filled up.")
 
     # Reduce the mixture to only non-trivial components
-    filter((gp::MaternGP) -> !iszero(gp.σ2), matern_mixture)
+    filter((gp::CPEMaternGP) -> !iszero(gp.σ2), matern_mixture)
 end
 
 
