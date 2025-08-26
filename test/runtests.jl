@@ -331,7 +331,7 @@ end
     gp = GeneralMaternGP(ν, ρ, σ2)
 
     cpe = materntocpe(gp)
-    @test functions_match(cpe, (t) -> kernel(gp, 0, t))
+    @test functions_match(cpe, t -> kernel(gp, 0, t))
 end
 
 @testitem "CPE to Matern Mixture" begin
@@ -347,22 +347,22 @@ end
     cpe_p0 = CPE(1 => [1])
     target_p0 = [GeneralMaternGP(0.5, 1.0, 1.0)]
     candidate_p0 = cpetomaternmixture(cpe_p0)
-    @test functions_match((t) -> kernel(candidate_p0, 0.0, t), (t) -> kernel(target_p0, 0.0, t))
+    @test functions_match(t -> kernel(candidate_p0, 0.0, t), t -> kernel(target_p0, 0.0, t))
 
     cpe_p1 = CPE(sqrt(3) => [1, sqrt(3)])
     target_p1 = [GeneralMaternGP(1.5, 1.0, 1.0)]
     candidate_p1 = cpetomaternmixture(cpe_p1)
-    @test functions_match((t) -> kernel(candidate_p1, 0.0, t), (t) -> kernel(target_p1, 0.0, t))
+    @test functions_match(t -> kernel(candidate_p1, 0.0, t), t -> kernel(target_p1, 0.0, t))
 
     cpe_p2 = CPE(sqrt(5) => [1, sqrt(5), 5 / 3])
     target_p2 = [GeneralMaternGP(2.5, 1.0, 1.0)]
     candidate_p2 = cpetomaternmixture(cpe_p2)
-    @test functions_match((t) -> kernel(candidate_p2, 0.0, t), (t) -> kernel(target_p2, 0.0, t))
+    @test functions_match(t -> kernel(candidate_p2, 0.0, t), t -> kernel(target_p2, 0.0, t))
 
     # Test that some more general CPE has the same form as its Matern Mixture
     cpe_general = CPE([0.1 => [9.3, 1.23], 1.542 => [8.432, 0.32, 7.543], 6.222 => [0.0, 1.11, 0.234]])
     candidate_general = cpetomaternmixture(cpe_general)
-    @test functions_match(cpe_general, (t) -> kernel(candidate_general, 0.0, t))
+    @test functions_match(cpe_general, t -> kernel(candidate_general, 0.0, t))
 end
 
 @testitem "SSM to Matern Mixture" begin
@@ -383,7 +383,7 @@ end
     candidate_kernel = ssm2GPKernel(ar_1)
     target_cov = CPE(-log(a) => [σ2 / (1 - a^2)])
 
-    @test functions_match((t) -> kernel(candidate_kernel, 0.0, t), target_cov)
+    @test functions_match(t -> kernel(candidate_kernel, 0.0, t), target_cov)
 
     # Check if some other SSM has the same covariance as its corresponding kernel
     general_A = [0.52 -0.32; -0.20 0.60]
@@ -396,7 +396,7 @@ end
     general_kernel = ssm2GPKernel(general_ssm)
     stationary_σ2 = only(general_H * lyapd(general_A, general_Q) * general_H')
 
-    @test functions_match_at_int((t) -> real(kernel(general_kernel, 0.0, t)), (t) -> stationary_σ2 * real(only(general_H * general_A^t * general_H')))
+    @test functions_match_at_int(t -> real(kernel(general_kernel, 0.0, t)), t -> stationary_σ2 * real(only(general_H * general_A^t * general_H')))
     
     # TODO: Implement the case corresponding to complex Matern arguments
 end
