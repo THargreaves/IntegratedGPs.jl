@@ -1,6 +1,8 @@
 using StaticArrays
 
 export ShiftingTransition, ExpandingTransition
+export ShiftingOffsetTransition, ExpandingOffsetTransition
+export ExpandingMarkovianTransition, ShiftingMarkovianTransition
 export quadratic_form, quadratic_form!
 
 """
@@ -86,8 +88,10 @@ function quadratic_form!(
     C = C.data
 
     # Compute new components
-    S11 = A.f' * S * A.f
-    S1_ = @views S[1:(n - 1), 1:(n - 1)] * A.f[1:(n - 1)] + S[1:(n - 1), n] * A.f[n]
+    @inbounds @views begin
+        S11 = A.f' * S * A.f
+        S1_ = S[1:(n - 1), 1:(n - 1)] * A.f[1:(n - 1)] + S[1:(n - 1), n] * A.f[n]
+    end
 
     # Fill C, which may be the same array as S
     @inbounds begin
@@ -225,5 +229,514 @@ function quadratic_form(A::ExpandingTransition, S::Symmetric)
     @assert size(S) == (n, n)
     C = Symmetric(similar(S, n + 1, n + 1))
 
+    return quadratic_form!(C, A, S)
+end
+
+"""
+An efficient sparse representation of the (n + 1) x (n + 1) transition matrix
+
+    [ f₁   f₂    ⋯   f_{n-1}   f_n   1 - f̄ ]
+    [  1    0    ⋯      0       0       0  ]
+    [  0    1    ⋯      0       0       0  ]
+    [  ⋮    ⋮    ⋱      ⋮       ⋮       ⋮   ]
+    [  0    0    ⋯      1       0       0  ]
+    [  0    0    ⋯      0       1       0  ]  <-  # would be 0, 1 in fixed offset case
+
+where f̄ = sum(f)
+"""
+struct ShiftingOffsetTransition{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+    f::V
+    f̄::T
+end
+function ShiftingOffsetTransition(f::AbstractVector{T}) where {T}
+    return ShiftingOffsetTransition(f, sum(f))
+end
+
+# AbstractMatrix interface
+Base.eltype(::ShiftingOffsetTransition{T}) where {T} = T
+function Base.size(A::ShiftingOffsetTransition)
+    n = length(A.f)
+    return (n + 1, n + 1)
+end
+function Base.axes(A::ShiftingOffsetTransition)
+    s = size(A)
+    return (Base.OneTo(s[1]), Base.OneTo(s[2]))
+end
+Base.IndexStyle(::Type{<:ShiftingOffsetTransition}) = IndexCartesian()
+function Base.getindex(A::ShiftingOffsetTransition, i::Integer, j::Integer)
+    n = length(A.f)
+    if j < 1 || j > n + 1 || i < 1 || i > n + 1
+        throw(BoundsError(A, (i, j)))
+    end
+
+    @inbounds begin
+        if i == 1
+            return (j == n + 1) ? one(eltype(A.f)) - A.f̄ : A.f[j]
+        elseif 2 <= i <= n + 1
+            return (j == (i - 1)) ? one(eltype(A.f)) : zero(eltype(A.f))
+        end
+    end
+end
+
+# Optimised linear algebra routines
+function LinearAlgebra.mul!(
+    y::AbstractVector{T}, A::ShiftingOffsetTransition{T}, x::AbstractVector{T}
+) where {T}
+    n = length(A.f)
+    @assert length(x) == n + 1
+    @assert length(y) == n + 1
+
+    @inbounds begin
+        # Store for later to allow case when x, y are the same array
+        y1 = dot(A.f, @view x[1:n]) + (one(T) - A.f̄) * x[n + 1]
+        # Recursive in reverse order to avoid overwriting x in the case x === y
+        for i in (n + 1):-1:2
+            y[i] = x[i - 1]
+        end
+        y[1] = y1
+    end
+    return y
+end
+function Base.:*(A::ShiftingOffsetTransition{T}, x::AbstractVector{T}) where {T}
+    n = length(A.f)
+    @assert length(x) == n + 1
+    y = similar(x, n + 1)
+
+    return mul!(y, A, x)
+end
+function Base.:*(
+    A::ShiftingOffsetTransition{T,<:SVector{N,T}}, x::SVector{N1,T}
+) where {N,N1,T}
+    @assert N1 == N + 1
+    y1 = dot(A.f, x[SOneTo(N)]) + (one(T) - A.f̄) * x[N + 1]
+    return SVector{N + 1,T}((y1, x[1:N]...))
+end
+
+function quadratic_form!(
+    C::Symmetric{T}, A::ShiftingOffsetTransition{T}, S::Symmetric{T}
+) where {T}
+    n = length(A.f)
+    @assert size(S) == (n + 1, n + 1)
+    @assert size(C) == (n + 1, n + 1)
+
+    # Perform operations on parent arrays
+    S = S.data
+    C = C.data
+
+    # Compute new components
+    @inbounds @views begin
+        S11 = (
+            A.f' * S[1:n, 1:n] * A.f +
+            2 * (one(T) - A.f̄) * dot(A.f, S[1:n, n + 1]) +
+            (one(T) - A.f̄)^2 * S[n + 1, n + 1]
+        )
+        S1_ = S[1:n, 1:n] * A.f + (one(T) - A.f̄) * S[1:n, n + 1]
+    end
+
+    # Fill C, which may be the same array as S
+    @inbounds begin
+
+        # Shift elements down and right
+        for i in (n + 1):-1:2
+            for j in (n + 1):-1:2
+                C[i, j] = S[i - 1, j - 1]
+            end
+        end
+
+        # Fill in first row and column
+        C[1, 1] = S11
+        C[2:(n + 1), 1] = S1_
+        C[1, 2:(n + 1)] = S1_'
+    end
+
+    return C
+end
+function quadratic_form(A::ShiftingOffsetTransition, S::Symmetric)
+    n = length(A.f)
+    @assert size(S) == (n + 1, n + 1)
+    C = Symmetric(similar(S, n + 1, n + 1))
+    return quadratic_form!(C, A, S)
+end
+
+"""
+An efficient sparse representation of the (n + 2) x (n + 1) transition matrix
+
+    [ f₁   f₂    ⋯   f_{n-1}   f_n   1 - f̄ ]
+    [  1    0    ⋯      0       0       0  ]
+    [  0    1    ⋯      0       0       0  ]
+    [  ⋮    ⋮    ⋱      ⋮       ⋮       ⋮   ]
+    [  0    0    ⋯      1       0       0  ]
+    [  0    0    ⋯      0       1       0  ]
+    [  0    0    ⋯      0       0       1  ]
+
+where f̄ = sum(f)
+"""
+struct ExpandinggOffsetTransition{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+    f::V
+    f̄::T
+end
+function ExpandingOffsetTransition(f::AbstractVector{T}) where {T}
+    return ExpandinggOffsetTransition(f, sum(f))
+end
+
+# AbstractMatrix interface
+Base.eltype(::ExpandinggOffsetTransition{T}) where {T} = T
+function Base.size(A::ExpandinggOffsetTransition)
+    n = length(A.f)
+    return (n + 2, n + 1)
+end
+function Base.axes(A::ExpandinggOffsetTransition)
+    s = size(A)
+    return (Base.OneTo(s[1]), Base.OneTo(s[2]))
+end
+Base.IndexStyle(::Type{<:ExpandinggOffsetTransition}) = IndexCartesian()
+function Base.getindex(A::ExpandinggOffsetTransition, i::Integer, j::Integer)
+    n = length(A.f)
+    if j < 1 || j > n + 1 || i < 1 || i > n + 2
+        throw(BoundsError(A, (i, j)))
+    end
+    @inbounds begin
+        if i == 1
+            return (j == n + 1) ? one(eltype(A.f)) - A.f̄ : A.f[j]
+        elseif 2 <= i <= n + 2
+            return (j == (i - 1)) ? one(eltype(A.f)) : zero(eltype(A.f))
+        end
+    end
+end
+
+# Optimised linear algebra routines
+function LinearAlgebra.mul!(
+    y::AbstractVector{T}, A::ExpandinggOffsetTransition{T}, x::AbstractVector{T}
+) where {T}
+    n = length(A.f)
+    @assert length(x) == n + 1
+    @assert length(y) == n + 2
+
+    @inbounds begin
+        # Store for later to allow case when x, y are the same array
+        y1 = dot(A.f, @view x[1:n]) + (one(T) - A.f̄) * x[n + 1]
+        # Recursive in reverse order to avoid overwriting x in the case x === y
+        for i in (n + 2):-1:2
+            y[i] = x[i - 1]
+        end
+        y[1] = y1
+    end
+    return y
+end
+function Base.:*(A::ExpandinggOffsetTransition{T}, x::AbstractVector{T}) where {T}
+    n = length(A.f)
+    @assert length(x) == n + 1
+    y = similar(x, n + 2)
+    return mul!(y, A, x)
+end
+function Base.:*(
+    A::ExpandinggOffsetTransition{T,<:SVector{N,T}}, x::SVector{N1,T}
+) where {N,N1,T}
+    @assert N1 == N + 1
+    y1 = dot(A.f, x[SOneTo(N)]) + (one(T) - A.f̄) * x[N + 1]
+    return SVector{N + 2,T}((y1, x...))
+end
+
+function quadratic_form!(
+    C::Symmetric{T}, A::ExpandinggOffsetTransition{T}, S::Symmetric{T}
+) where {T}
+    n = length(A.f)
+    @assert size(S) == (n + 1, n + 1)
+    @assert size(C) == (n + 2, n + 2)
+
+    # Perform operations on parent arrays
+    S = S.data
+    C = C.data
+
+    # Compute new components
+    @inbounds @views begin
+        S11 = (
+            A.f' * S[1:n, 1:n] * A.f +
+            2 * (one(T) - A.f̄) * dot(A.f, S[1:n, n + 1]) +
+            (one(T) - A.f̄)^2 * S[n + 1, n + 1]
+        )
+        S1_ = S[1:n, 1:n] * A.f + (one(T) - A.f̄) * S[1:n, n + 1]
+        S1n2 = dot(A.f, S[1:n, n + 1]) + (one(T) - A.f̄) * S[n + 1, n + 1]
+    end
+
+    # Fill C, which may be the same array as S
+    @inbounds begin
+        # Shift elements down and right
+        for i in (n + 2):-1:2
+            for j in (n + 2):-1:2
+                C[i, j] = S[i - 1, j - 1]
+            end
+        end
+
+        # Fill in first row and column
+        C[1, 1] = S11
+        C[2:(n + 1), 1] = S1_
+        C[1, 2:(n + 1)] = S1_'
+        C[n + 2, 1] = S1n2
+        C[1, n + 2] = S1n2
+    end
+
+    return C
+end
+function quadratic_form(A::ExpandinggOffsetTransition, S::Symmetric)
+    n = length(A.f)
+    @assert size(S) == (n + 1, n + 1)
+    C = Symmetric(similar(S, n + 2, n + 2))
+    return quadratic_form!(C, A, S)
+end
+
+"""
+An efficient sparse representation of the (n + 1) x n transition matrix
+
+    [ f₁   f₂    ⋯   f_{n-2}  f_{n-1}  1 - f̄ ]
+    [  1    0    ⋯      0        0       0   ]
+    [  0    1    ⋯      0        0       0   ]
+    [  ⋮    ⋮    ⋱      ⋮        ⋮       ⋮    ]
+    [  0    0    ⋯      1        0       0   ]
+    [  0    0    ⋯      0        1       0   ]
+    [  0    0    ⋯      0        0       1   ]
+
+where f̄ = sum(f)
+"""
+struct ExpandingMarkovianTransition{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+    f::V
+    f_rem::T  # 1 - sum(f)
+end
+function ExpandingMarkovianTransition(f::AbstractVector{T}) where {T}
+    return ExpandingMarkovianTransition(f, one(T) - sum(f))
+end
+
+# AbstractMatrix interface
+Base.eltype(::ExpandingMarkovianTransition{T}) where {T} = T
+function Base.size(A::ExpandingMarkovianTransition)
+    n = length(A.f) + 1
+    return (n + 1, n)
+end
+function Base.axes(A::ExpandingMarkovianTransition)
+    s = size(A)
+    return (Base.OneTo(s[1]), Base.OneTo(s[2]))
+end
+Base.IndexStyle(::Type{<:ExpandingMarkovianTransition}) = IndexCartesian()
+function Base.getindex(A::ExpandingMarkovianTransition{T}, i::Integer, j::Integer) where {T}
+    n = length(A.f) + 1
+    if j < 1 || j > n || i < 1 || i > n + 1
+        throw(BoundsError(A, (i, j)))
+    end
+
+    @inbounds begin
+        if i == 1
+            return (j == n) ? A.f_rem : A.f[j]
+        end
+
+        return (j == (i - 1)) ? one(T) : zero(T)
+    end
+end
+
+# Optimised linear algebra routines
+function LinearAlgebra.mul!(
+    y::AbstractVector{T}, A::ExpandingMarkovianTransition{T}, x::AbstractVector{T}
+) where {T}
+    n = length(A.f) + 1
+    @assert length(x) == n
+    @assert length(y) == n + 1
+
+    @inbounds begin
+        # Store for later to allow case when x, y are the same array
+        y1 = dot(A.f, @view x[1:(n - 1)]) + A.f_rem * x[n]
+        # Recursive in reverse order to avoid overwriting x in the case x === y
+        for i in (n + 1):-1:2
+            y[i] = x[i - 1]
+        end
+        y[1] = y1
+    end
+
+    return y
+end
+function Base.:*(A::ExpandingMarkovianTransition{T}, x::AbstractVector{T}) where {T}
+    n = length(A.f) + 1
+    @assert length(x) == n
+    y = similar(x, n + 1)
+
+    return mul!(y, A, x)
+end
+function Base.:*(
+    A::ExpandingMarkovianTransition{T,<:SVector{N,T}}, x::SVector{N1,T}
+) where {N,N1,T}
+    @assert N1 == N + 1
+    y1 = dot(A.f, x[SOneTo(N)]) + A.f_rem * x[N + 1]
+    return SVector{N + 2,T}((y1, x...))
+end
+
+function quadratic_form!(
+    C::Symmetric{T}, A::ExpandingMarkovianTransition{T}, S::Symmetric{T}
+) where {T}
+    n = length(A.f) + 1
+    @assert size(S) == (n, n)
+    @assert size(C) == (n + 1, n + 1)
+
+    # Perform operations on parent arrays
+    S = S.data
+    C = C.data
+
+    # Compute new components
+    @inbounds @views begin
+        S11 = (
+            A.f' * S[1:(n - 1), 1:(n - 1)] * A.f +
+            2 * A.f_rem * dot(A.f, S[1:(n - 1), n]) +
+            A.f_rem^2 * S[n, n]
+        )
+        S1_ = S[1:(n - 1), 1:(n - 1)] * A.f + A.f_rem * S[1:(n - 1), n]
+        S1n1 = dot(A.f, S[1:(n - 1), n]) + A.f_rem * S[n, n]
+    end
+
+    # Fill C, which may be the same array as S
+    @inbounds begin
+        # Shift elements down and right
+        for i in (n + 1):-1:2
+            for j in (n + 1):-1:2
+                C[i, j] = S[i - 1, j - 1]
+            end
+        end
+
+        # Fill in first row and column
+        C[1, 1] = S11
+        C[2:n, 1] = S1_
+        C[1, 2:n] = S1_'
+        C[n + 1, 1] = S1n1
+        C[1, n + 1] = S1n1
+    end
+
+    return C
+end
+function quadratic_form(A::ExpandingMarkovianTransition, S::Symmetric)
+    n = length(A.f) + 1
+    @assert size(S) == (n, n)
+    C = Symmetric(similar(S, n + 1, n + 1))
+    return quadratic_form!(C, A, S)
+end
+
+"""
+An efficient sparse representation of the n x n transition matrix
+
+    [ f₁   f₂    ⋯   f_{n-2}  f_{n-1}  1 - f̄ ]
+    [  1    0    ⋯      0        0       0   ]
+    [  0    1    ⋯      0        0       0   ]
+    [  ⋮    ⋮    ⋱      ⋮        ⋮       ⋮    ]
+    [  0    0    ⋯      1        0       0   ]
+    [  0    0    ⋯      0        1       0   ]
+
+where f̄ = sum(f)
+"""
+struct ShiftingMarkovianTransition{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+    f::V
+    f_rem::T  # 1 - sum(f)
+end
+function ShiftingMarkovianTransition(f::AbstractVector{T}) where {T}
+    return ShiftingMarkovianTransition(f, one(T) - sum(f))
+end
+
+# AbstractMatrix interface
+Base.eltype(::ShiftingMarkovianTransition{T}) where {T} = T
+function Base.size(A::ShiftingMarkovianTransition)
+    n = length(A.f) + 1
+    return (n, n)
+end
+function Base.axes(A::ShiftingMarkovianTransition)
+    s = size(A)
+    return (Base.OneTo(s[1]), Base.OneTo(s[2]))
+end
+Base.IndexStyle(::Type{<:ShiftingMarkovianTransition}) = IndexCartesian()
+function Base.getindex(A::ShiftingMarkovianTransition{T}, i::Integer, j::Integer) where {T}
+    n = length(A.f) + 1
+    if j < 1 || j > n || i < 1 || i > n
+        throw(BoundsError(A, (i, j)))
+    end
+
+    @inbounds begin
+        if i == 1
+            return (j == n) ? A.f_rem : A.f[j]
+        end
+
+        return (j == (i - 1)) ? one(T) : zero(T)
+    end
+end
+
+# Optimised linear algebra routines
+function LinearAlgebra.mul!(
+    y::AbstractVector{T}, A::ShiftingMarkovianTransition{T}, x::AbstractVector{T}
+) where {T}
+    n = length(A.f) + 1
+    @assert length(x) == n
+    @assert length(y) == n
+
+    @inbounds begin
+        # Store for later to allow case when x, y are the same array
+        y1 = dot(A.f, @view x[1:(n - 1)]) + A.f_rem * x[n]
+        # Recursive in reverse order to avoid overwriting x in the case x === y
+        for i in n:-1:2
+            y[i] = x[i - 1]
+        end
+        y[1] = y1
+    end
+
+    return y
+end
+function Base.:*(A::ShiftingMarkovianTransition{T}, x::AbstractVector{T}) where {T}
+    n = length(A.f) + 1
+    @assert length(x) == n
+    y = similar(x, n)
+
+    return mul!(y, A, x)
+end
+function Base.:*(
+    A::ShiftingMarkovianTransition{T,<:SVector{N,T}}, x::SVector{N1,T}
+) where {N,N1,T}
+    @assert N1 == N
+    y1 = dot(A.f, x[SOneTo(N - 1)]) + A.f_rem * x[N]
+    return SVector{N,T}((y1, x[SOneTo(N - 1)]...))
+end
+
+function quadratic_form!(
+    C::Symmetric{T}, A::ShiftingMarkovianTransition{T}, S::Symmetric{T}
+) where {T}
+    n = length(A.f) + 1
+    @assert size(S) == (n, n)
+    @assert size(C) == (n, n)
+
+    # Perform operations on parent arrays
+    S = S.data
+    C = C.data
+
+    # Compute new components
+    @inbounds @views begin
+        S11 = (
+            A.f' * S[1:(n - 1), 1:(n - 1)] * A.f +
+            2 * A.f_rem * dot(A.f, S[1:(n - 1), n]) +
+            A.f_rem^2 * S[n, n]
+        )
+        S1_ = S[1:(n - 1), 1:(n - 1)] * A.f + A.f_rem * S[1:(n - 1), n]
+    end
+
+    # Fill C, which may be the same array as S
+    @inbounds begin
+        # Shift elements down and right
+        for i in n:-1:2
+            for j in n:-1:2
+                C[i, j] = S[i - 1, j - 1]
+            end
+        end
+
+        # Fill in first row and column
+        C[1, 1] = S11
+        C[2:n, 1] = S1_
+        C[1, 2:n] = S1_'
+    end
+
+    return C
+end
+function quadratic_form(A::ShiftingMarkovianTransition, S::Symmetric)
+    n = length(A.f) + 1
+    @assert size(S) == (n, n)
+    C = Symmetric(similar(S, n, n))
     return quadratic_form!(C, A, S)
 end
