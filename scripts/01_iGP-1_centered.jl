@@ -29,7 +29,7 @@ using Random
 ν = 1.5
 ρ = 0.8
 σk = 1.2
-gp = IntegratedGeneralMaternGP(ν, ρ, σk^2)
+gp = integrate(GeneralMaternGP(ν, ρ, σk^2))
 
 # Simulation
 τ0 = 1.0  # HACK: using to avoid degeneracy
@@ -48,7 +48,7 @@ d = 20
 
 function simulate(
     rng::AbstractRNG,
-    gp::IntegratedGeneralMaternGP,
+    gp::IntegratedMaternGP,
     τ0::Float64,
     τ::Float64,
     K::Int,

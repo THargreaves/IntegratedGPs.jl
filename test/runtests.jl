@@ -12,7 +12,7 @@ using TestItemRunner
     ρ = 2.0
     σ2 = 1.0
     gp = GeneralMaternGP(ν, ρ, σ2)
-    int_gp = IntegratedGeneralMaternGP(ν, ρ, σ2)
+    int_gp = integrate(gp)
 
     # Test s ≠ t case
     s, t = 0.8, 1.1
@@ -34,7 +34,7 @@ end
     ν = 1.5
     ρ = 2.0
     σ2 = 1.0
-    gp = IntegratedGeneralMaternGP(ν, ρ, σ2)
+    gp = integrate(GeneralMaternGP(ν, ρ, σ2))
 
     s, t = 0.8, 1.1
     kernel(gp, s, t)

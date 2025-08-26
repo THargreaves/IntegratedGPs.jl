@@ -3,44 +3,46 @@ import SpecialFunctions: gamma
 import Struve: struvel
 using LRUCache
 
-export MaternGP, GeneralMaternGP, IntegratedGeneralMaternGP, CPEMaternGP, IntegratedCPEMaternGP, kernel
+export MaternGP, IntegratedMaternGP, GeneralMaternGP, IntegratedGeneralMaternGP, CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate
 export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
 abstract type GPKernel end
 abstract type StationaryGPKernel <: GPKernel end
 abstract type IntegratedGPKernel <: GPKernel end
+abstract type IntegratedStationaryGPKernel <: IntegratedGPKernel end
 
-struct GeneralIntegratedGPKernel <: IntegratedGPKernel
-    base_kernel::StationaryGPKernel
+struct IntegratedGeneralGPKernel <: IntegratedGPKernel
+    base_kernel::GPKernel
 end
 
 function kernel(gp::GPKernel, s, t)
     error("GP Kernel has not been implemented.")
 end
-function kernel(igp::GeneralIntegratedGPKernel, s, t)
-    return hcubature((s, t) -> kernel(igp.base_kernel, s, t), [0.0, 0.0], [s, t])
-end
 function kernel(gp_mixture::Vector{T}, s, t) where T <: GPKernel
     sum([kernel(gp, s, t) for gp in gp_mixture])
 end
 
+function kernel(igp::IntegratedGeneralGPKernel, s, t)
+    return hcubature((s, t) -> kernel(igp.base_kernel, s, t), [0.0, 0.0], [s, t])
+end
 
-function I0(gp::IntegratedGPKernel, t)
+
+function I0(gp::IntegratedStationaryGPKernel, t)
     get!(gp.I0_cache, t) do
         _I0(gp, t)
     end
 end
 
-function I1(gp::IntegratedGPKernel, t)
+function I1(gp::IntegratedStationaryGPKernel, t)
     get!(gp.I1_cache, t) do
         _I1(gp, t)
     end
 end
-I1(gp::IntegratedGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
+I1(gp::IntegratedStationaryGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
 
-function kernel(gp::IntegratedGPKernel, s, t)
+function kernel(gp::IntegratedStationaryGPKernel, s, t)
     # Special case where s = t — only middle integral is non-zero
     if s == t
         return 2s * I0(gp, s) - 2I1(gp, s)
@@ -64,6 +66,7 @@ end
 
 
 abstract type MaternGP <: StationaryGPKernel end;
+abstract type IntegratedMaternGP <: IntegratedStationaryGPKernel end;
 
 struct GeneralMaternGP{T1, T2, T3} <: MaternGP
     ν::T1
@@ -109,7 +112,7 @@ end
 
 kernel(gp::CPEMaternGP, s, t) = gp.cpe(abs(s - t))
 
-struct IntegratedGeneralMaternGP{T} <: IntegratedGPKernel
+struct IntegratedGeneralMaternGP{T} <: IntegratedMaternGP
     ν::T
     ρ::T
     σ2::T
@@ -122,6 +125,7 @@ struct IntegratedGeneralMaternGP{T} <: IntegratedGPKernel
     I1_cache::LRU{T,T}
 end
 
+IntegratedGeneralMaternGP(gp::GeneralMaternGP{T}; cache_size=1000) where {T} = IntegratedGeneralMaternGP(gp.ν, gp.ρ, gp.σ2; cache_size)
 function IntegratedGeneralMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
     # Compute constants
     C0 = σ2 * sqrt(π) * gamma(ν + 0.5) / gamma(ν)
@@ -157,7 +161,7 @@ function _I1(gp::IntegratedGeneralMaternGP{T}, t) where {T}
     return gp.C1_const - gp.C1_bessel * x^(ν + 1) * besselk(ν + 1, x)
 end
 
-struct IntegratedCPEMaternGP{T} <: IntegratedGPKernel
+struct IntegratedCPEMaternGP{T} <: IntegratedMaternGP
     ν::T
     ρ::T
     σ2::T
@@ -171,7 +175,7 @@ struct IntegratedCPEMaternGP{T} <: IntegratedGPKernel
     I1_cache::LRU{T,T}
 end
 
-function IntegratedCPEMaternGP(gp::CPEMaternGP; cache_size=1000) where {T}
+function IntegratedCPEMaternGP(gp::CPEMaternGP{T}; cache_size=1000) where {T}
     I0_cpe = I0_form(gp.cpe)
     I1_cpe = I1_form(gp.cpe)
 
@@ -183,6 +187,13 @@ end
 _I0(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I0_cpe(t)
 _I1(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I1_cpe(t)
 
+IntegratedMaternGP(gp::GeneralMaternGP) = IntegratedGeneralMaternGP(gp)
+IntegratedMaternGP(gp::CPEMaternGP) = IntegratedCPEMaternGP(gp)
+
+
+integrate(gp_mixture::Vector{GPKernel}) = [integrate(gp) for gp in gp_mixture]
+integrate(gp::GPKernel) = IntegratedGeneralGPKernel(gp)
+integrate(gp::MaternGP) = IntegratedMaternGP(gp)
 
 
 
