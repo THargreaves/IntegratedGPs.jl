@@ -3,7 +3,7 @@ import SpecialFunctions: gamma
 import Struve: struvel
 using LRUCache
 
-export AbstractMaternGP, AbstractIntegratedMaternGP, GeneralMaternGP, IntegratedGeneralMaternGP, CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate, I0, I1
+export AbstractMaternGP, AbstractIntegratedMaternGP, MaternGP, IntegratedMaternGP, CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate, I0, I1
 export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
@@ -55,7 +55,7 @@ end
 abstract type AbstractMaternGP <: AbstractRadialGPKernel end;
 abstract type AbstractIntegratedMaternGP <: AbstractIntegratedRadialGPKernel end;
 
-struct GeneralMaternGP{T} <: AbstractMaternGP
+struct MaternGP{T} <: AbstractMaternGP
     ν::T
     ρ::T
     σ2::T
@@ -75,13 +75,13 @@ function CPEMaternGP(ν, ρ, σ2)
     CPEMaternGP(ν, ρ, σ2, cpe)
 end
 
-AbstractMaternGP(ν, ρ, σ2) = isinteger(ν - 0.5) ? CPEMaternGP(ν, ρ, σ2) : GeneralMaternGP(ν, ρ, σ2)
+AbstractMaternGP(ν, ρ, σ2) = isinteger(ν - 0.5) ? CPEMaternGP(ν, ρ, σ2) : MaternGP(ν, ρ, σ2)
 
-isapprox(a::GeneralMaternGP, b::GeneralMaternGP; rtol=1E-8) = isapprox(a.ν,  b.ν;  rtol) && 
+isapprox(a::MaternGP, b::MaternGP; rtol=1E-8) = isapprox(a.ν,  b.ν;  rtol) && 
                                                 isapprox(a.ρ,  b.ρ;  rtol) && 
                                                 isapprox(a.σ2, b.σ2; rtol)
 
-function kernel(gp::GeneralMaternGP, s, t)
+function kernel(gp::MaternGP, s, t)
     ν = gp.ν
     ρ = gp.ρ
     σ2 = gp.σ2
@@ -99,7 +99,7 @@ end
 
 kernel(gp::CPEMaternGP, s, t) = gp.cpe(abs(s - t))
 
-struct IntegratedGeneralMaternGP{T} <: AbstractIntegratedMaternGP
+struct IntegratedMaternGP{T} <: AbstractIntegratedMaternGP
     ν::T
     ρ::T
     σ2::T
@@ -112,8 +112,8 @@ struct IntegratedGeneralMaternGP{T} <: AbstractIntegratedMaternGP
     I1_cache::LRU{T,T}
 end
 
-IntegratedGeneralMaternGP(gp::GeneralMaternGP{T}; cache_size=1000) where {T} = IntegratedGeneralMaternGP(gp.ν, gp.ρ, gp.σ2; cache_size)
-function IntegratedGeneralMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
+IntegratedMaternGP(gp::MaternGP{T}; cache_size=1000) where {T} = IntegratedMaternGP(gp.ν, gp.ρ, gp.σ2; cache_size)
+function IntegratedMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
     # Compute constants
     C0 = σ2 * sqrt(π) * gamma(ν + 0.5) / gamma(ν)
     C1_const = σ2 * ρ^2
@@ -121,10 +121,10 @@ function IntegratedGeneralMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where 
 
     I0_cache = LRU{T,T}(; maxsize=cache_size)
     I1_cache = LRU{T,T}(; maxsize=cache_size)
-    return IntegratedGeneralMaternGP{T}(ν, ρ, σ2, C0, C1_const, C1_bessel, I0_cache, I1_cache)
+    return IntegratedMaternGP{T}(ν, ρ, σ2, C0, C1_const, C1_bessel, I0_cache, I1_cache)
 end
 
-function _I0(gp::IntegratedGeneralMaternGP{T}, t) where {T}
+function _I0(gp::IntegratedMaternGP{T}, t) where {T}
     ν = gp.ν
     ρ = gp.ρ
 
@@ -137,7 +137,7 @@ function _I0(gp::IntegratedGeneralMaternGP{T}, t) where {T}
     )
 end
 
-function _I1(gp::IntegratedGeneralMaternGP{T}, t) where {T}
+function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     ν = gp.ν
     ρ = gp.ρ
 
@@ -174,7 +174,7 @@ end
 _I0(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I0_cpe(t)
 _I1(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I1_cpe(t)
 
-AbstractIntegratedMaternGP(gp::GeneralMaternGP) = IntegratedGeneralMaternGP(gp)
+AbstractIntegratedMaternGP(gp::MaternGP) = IntegratedMaternGP(gp)
 AbstractIntegratedMaternGP(gp::CPEMaternGP) = IntegratedCPEMaternGP(gp)
 
 
