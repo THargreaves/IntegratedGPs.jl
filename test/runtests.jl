@@ -129,6 +129,7 @@ end
 @testitem "Integrated Matern Kernel" begin
     using IntegratedMaternGPs
     using HCubature
+    using Struve
 
     ν = 1.5
     ρ = 2.0
@@ -147,6 +148,15 @@ end
     kernel_numerical = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
     kernel_analytical = kernel(int_gp, s, t)
     @test kernel_numerical ≈ kernel_analytical rtol = 1e-8
+
+    # Test in large argument case
+    s, t = 100.0, 110.0
+    @assert Struve.struvem_large_arg_cutoff(ν, s)
+    kernel_numerical, err = HCubature.hcubature(
+        x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t]
+    )
+    kernel_analytical = kernel(int_gp, s, t)
+    @test kernel_numerical ≈ kernel_analytical rtol = 1e-4  # TODO: reduce tolerance
 end
 
 @testitem "LRU Cache" begin
