@@ -662,3 +662,17 @@ end
 
     # TODO: Implement the case corresponding to complex Matern arguments
 end
+
+@testitem "Stable Bessel-Struve product" begin
+    using IntegratedMaternGPs
+    using Struve
+
+    # Test at cutoff point of approximation methods
+    x = 37.0
+    ν = evalpoly(x, (7.0, -0.59, 0.011))
+
+    y1 = IntegratedMaternGPs._besselk_struvel_large_arg(ν - 1, ν, x)
+    y2 = IntegratedMaternGPs._besselk_struvel_small_arg(ν - 1, ν, x)
+
+    @test y1 ≈ y2 rtol = 1e-2
+end
