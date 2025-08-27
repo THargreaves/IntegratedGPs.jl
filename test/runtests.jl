@@ -31,7 +31,8 @@ using TestItemRunner
 
     functions_match(f, g) = all(x -> isapprox(f(x), g(x)), 0:1E-1:5)
 
-    # Test that floats are correctly converted to CPEs and evaluating a constant expression gives the expected result
+    # Test that floats are correctly converted to CPEs and evaluating a constant 
+    # expression gives the expected result
     const_val = 4.0
     const_cpe = CPE(const_val)
     @test functions_match(const_cpe, (x) -> const_val)
@@ -56,8 +57,9 @@ end
 
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8),  0:1E-1:5)
-    integrals_match(f::CPE) = functions_match(integrate(f), x -> hquadrature(y -> f(y), 0.0, x)[1])
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
+    integrals_match(f::CPE) =
+        functions_match(integrate(f), x -> hquadrature(y -> f(y), 0.0, x)[1])
 
     # Test that constants integrate correctly
     const_val = 5.345
@@ -78,7 +80,7 @@ end
 
     import Base: isapprox
 
-    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
 
     # Test if the Matern GPs are separated into cases when ν = p + 0.5
     ν1 = 1.6
@@ -107,8 +109,8 @@ end
 
     import Base: isapprox
 
-    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
-    
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
+
     # Test that the I0 and I1 functions provide the same answers as numerical methods
     ν = 4.3
     ρ = 2.1
@@ -137,15 +139,15 @@ end
 
     # Test s ≠ t case
     s, t = 0.8, 1.1
-    kernel_numerical = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
+    kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
     kernel_analytical = kernel(int_gp, s, t)
-    @test kernel_numerical ≈ kernel_analytical rtol = 1e-8
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
 
     # Test s = t case
     s = t = 0.8
-    kernel_numerical = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
+    kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
     kernel_analytical = kernel(int_gp, s, t)
-    @test kernel_numerical ≈ kernel_analytical rtol = 1e-8
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
 end
 
 @testitem "LRU Cache" begin
@@ -561,7 +563,7 @@ end
 
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
 
     # The case ν = 0.5 is known exactly, test that it corresponds to the expected expression
     gp_p0 = MaternGP(0.5, 1.0, 1.0)
@@ -595,7 +597,7 @@ end
 
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
 
     # Take the known cases of Matern -> CPE and check that the inverse still matches
     cpe_p0 = CPE(1 => [1])
@@ -629,10 +631,11 @@ end
 
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
-    functions_match_at_int(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1:10)
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
+    functions_match_at_int(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1:10)
 
-    # The AR(1) process has a known closed form covariance. Test that it matches the equivalent Matern Mixture.
+    # The AR(1) process has a known closed form covariance. 
+    # Test that it matches the equivalent Matern Mixture.
     a = 0.9
     σ2 = 1.0
     ar_1 = SSM([a;;], [σ2;;], [1.0;;])
@@ -646,7 +649,9 @@ end
     general_Q = [3.58 1.78; 1.78 4.56]
     general_H = [5.43 -0.67;]
     any(z -> abs(z) > 1, eigen(general_A).values) && error(
-        "A matrix should not have poles outside the unit circle; found $(eigen(general_A).values) with magnitude $([abs(z) for z in eigen(general_A).values])"
+        "A matrix should not have poles outside the 
+        unit circle; found $(eigen(general_A).values) with 
+        magnitude $([abs(z) for z in eigen(general_A).values])",
     )
     det(general_Q) <= 0 && error("Q must be positive definite.")
 

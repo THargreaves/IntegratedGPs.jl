@@ -3,7 +3,8 @@ import SpecialFunctions: gamma
 import Struve: struvel
 using LRUCache
 
-export AbstractMaternGP, AbstractIntegratedMaternGP, MaternGP, IntegratedMaternGP, CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate, I0, I1
+export AbstractMaternGP, AbstractIntegratedMaternGP, MaternGP, IntegratedMaternGP, 
+    CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate, I0, I1
 export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
@@ -33,14 +34,16 @@ function I0(gp::AbstractIntegratedRadialGPKernel, t)
         _I0(gp, t)
     end
 end
-_I0(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _I0 function has not been implemented.") 
+_I0(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _I0 
+                                                        function has not been implemented.") 
 
 function I1(gp::AbstractIntegratedRadialGPKernel, t)
     get!(gp.I1_cache, t) do
         _I1(gp, t)
     end
 end
-_I1(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _I1 function has not been implemented.")
+_I1(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _I1 
+                                                        function has not been implemented.")
 I1(gp::AbstractIntegratedRadialGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
 

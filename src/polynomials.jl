@@ -1,7 +1,7 @@
 using Polynomials, HCubature, LinearAlgebra, MatrixEquations
 
 export PolynomialExp, CompoundPolynomialExp, SSM
-export +, show, isequal, isapprox
+export +, show, isequal, isapprox, zero
 export integrate, materntocpe, cpetomaternmixture, ssm2GPKernel
 
 
@@ -94,10 +94,12 @@ function integrate(pe::PolynomialExp)
     beta = pe.beta
     poly = pe.polynomial
 
-    # If beta = 0, the PolynomialExp is just a polynomial, so standard polynomial integration is sufficient
+    # If beta = 0, the PolynomialExp is just a polynomial, so standard polynomial 
+    # integration is sufficient
     iszero(beta) && return CompoundPolynomialExp(beta => Polynomials.integrate(poly))
 
-    # Integrate the PolynomialExp term by term, given that x^n exp(-beta x) can be integrated exactly
+    # Integrate the PolynomialExp term by term, given that x^n exp(-beta x) can 
+    # be integrated exactly
     sum(n -> poly[n] * integrated_monomial(n, beta), 0:degree(pe))
 end
 
@@ -111,7 +113,8 @@ I1_form(cpe::CompoundPolynomialExp) = integrate(cpe * Polynomial([0, 1]))
 
 materntocpe(gp::MaternGP) = materntocpe(gp.ν, gp.ρ, gp.σ2)
 materntocpe(gp::CPEMaternGP) = gp.cpe
-# In the specific case when ν = p + 0.5 (p ∈ Z), the Matern kernel can be evaluated exactly as a CompoundPolynomialExp
+# In the specific case when ν = p + 0.5 (p ∈ Z), the Matern kernel can be evaluated exactly 
+# as a CompoundPolynomialExp
 function materntocpe(ν, ρ, σ2)
     !isinteger(ν - 0.5) && error("Provided Matern kernel does not have a CPE kernel.")
 
@@ -127,7 +130,8 @@ function materntocpe(ν, ρ, σ2)
     return CompoundPolynomialExp([beta => const_factor * Polynomial(base_coefs)])
 end
 
-# Determine a Matern Mixture with the same closed-form as a given CPE using a simple form of Gaussian elimination in the space of PolynomialExps
+# Determine a Matern Mixture with the same closed-form as a given CPE using a simple form 
+# of Gaussian elimination in the space of PolynomialExps
 function cpetomaternmixture(cpe::CompoundPolynomialExp{T, PT}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
     poly_degs = [Polynomials.degree(poly) for (beta, poly) in cpe.polynomials]
     num_terms = sum(poly_degs .+ 1)
@@ -189,7 +193,8 @@ struct SSM{T}
     end
 end
 
-# Evaluate the SSM Cov for N time steps. Since the Cov is known to have the form of a CPE, the exact coefficients can be evaluated by solving a system of linear equations.
+# Evaluate the SSM Cov for N time steps. Since the Cov is known to have the form of a CPE, 
+# the exact coefficients can be evaluated by solving a system of linear equations.
 function fit_cov(ssm::SSM)
     size(ssm.H)[1] != 1 &&
         error("SSM needs to have one output for covariance matching to work.")
@@ -203,7 +208,8 @@ function fit_cov(ssm::SSM)
     prev_eigen = -Inf
     mult = Inf
     for (ind, eig) in enumerate(eigen_vals)
-        # If the current eigenvalue is the same as the previous one, increase the multiplicity, otherwise reset to 0
+        # If the current eigenvalue is the same as the previous one, increase 
+        # the multiplicity, otherwise reset to 0
         mult = Base.isapprox(eig, prev_eigen; rtol=1E-4) ? (mult + 1) : 0
 
         basis[ind] = PolynomialExp(onehot(mult + 1), -log(eig < 0 ? Complex(eig) : eig))
@@ -214,7 +220,8 @@ function fit_cov(ssm::SSM)
     M = zeros(ComplexF64, (N, N))
     v = zeros((N, 1))
 
-    process_σ2 = only(ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H') # Solve the Discrete Algebraic Lyapunov Equation to get the stationary process variance
+    # Solve the Discrete Algebraic Lyapunov Equation to get the stationary process variance
+    process_σ2 = only(ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H') 
     ssm_cov = process_σ2 * ssm.A
 
     for t in 1:N
@@ -231,5 +238,6 @@ function fit_cov(ssm::SSM)
     return sum(coefs .* basis)
 end
 
-# Since the SSM Cov is a CPE, and a CPE is a Matern Mixture, the SSM Mixture is a Matern Mixture
+# Since the SSM Cov is a CPE, and a CPE is a Matern Mixture, 
+# the SSM Mixture is a Matern Mixture
 ssm2GPKernel(ssm::SSM) = cpetomaternmixture(fit_cov(ssm))
