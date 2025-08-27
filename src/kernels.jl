@@ -12,8 +12,8 @@ abstract type AbstractStationaryGPKernel <: AbstractGPKernel end
 abstract type AbstractIntegratedGPKernel <: AbstractGPKernel end
 abstract type AbstractIntegratedStationaryGPKernel <: AbstractIntegratedGPKernel end
 
-struct IntegratedGeneralGPKernel <: AbstractIntegratedGPKernel
-    base_kernel::AbstractGPKernel
+struct Integrated{T <: AbstractGPKernel} <: AbstractIntegratedGPKernel
+    base_kernel::T
 end
 
 function kernel(gp::AbstractGPKernel, s, t)
@@ -23,7 +23,7 @@ function kernel(gp_mixture::Vector{T}, s, t) where T <: AbstractGPKernel
     sum([kernel(gp, s, t) for gp in gp_mixture])
 end
 
-function kernel(igp::IntegratedGeneralGPKernel, s, t)
+function kernel(igp::Integrated{T <: AbstractGPKernel}, s, t)
     return hcubature((s, t) -> kernel(igp.base_kernel, s, t), [0.0, 0.0], [s, t])
 end
 
@@ -178,8 +178,8 @@ AbstractIntegratedMaternGP(gp::GeneralMaternGP) = IntegratedGeneralMaternGP(gp)
 AbstractIntegratedMaternGP(gp::CPEMaternGP) = IntegratedCPEMaternGP(gp)
 
 
-integrate(gp_mixture::Vector{AbstractGPKernel}) = [integrate(gp) for gp in gp_mixture]
-integrate(gp::AbstractGPKernel) = IntegratedGeneralGPKernel(gp)
+integrate(gp_mixture::Vector{T}) where {T <: AbstractGPKernel} = [integrate(gp) for gp in gp_mixture]
+integrate(gp::T) where {T <: AbstractGPKernel} = Integrated{T}(gp)
 integrate(gp::AbstractMaternGP) = AbstractIntegratedMaternGP(gp)
 
 
