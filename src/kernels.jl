@@ -20,7 +20,7 @@ function kernel(gp::AbstractGPKernel, s, t)
     error("GP Kernel has not been implemented.")
 end
 function kernel(gp_mixture::Vector{T}, s, t) where T <: AbstractGPKernel
-    sum([kernel(gp, s, t) for gp in gp_mixture])
+    sum(gp -> kernel(gp, s, t),  gp_mixture)
 end
 
 function kernel(igp::Integrated{T <: AbstractGPKernel}, s, t)

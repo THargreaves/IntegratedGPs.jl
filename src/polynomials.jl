@@ -15,7 +15,7 @@ Base.:*(c::Number, cpe::CompoundPolynomialExp) = CompoundPolynomialExp([beta => 
 Base.:/(pe::PolynomialExp, c::Number) = PolynomialExp(pe.polynomial / c, pe.beta);
 degree(pe::PolynomialExp) = Polynomials.degree(pe.polynomial)
 
-(cpe::CompoundPolynomialExp)(x) = sum(PolynomialExp(poly, beta)(x) for (beta, poly) in cpe.polynomials)
+(cpe::CompoundPolynomialExp)(x) = sum((beta, poly) -> PolynomialExp(poly, beta)(x), cpe.polynomials)
 
 CompoundPolynomialExp(itr::Vector{Pair{T, P}}) where {T <: Number, P <: Polynomial} = CompoundPolynomialExp(Dict(itr))
 CompoundPolynomialExp(itr::Vector{Pair{T, P}}) where {T <: Number, P <: Vector} = CompoundPolynomialExp(Dict([(k, Polynomial(v)) for (k, v) in itr]))
@@ -63,14 +63,14 @@ function integrate(pe::PolynomialExp)
     poly = pe.polynomial
 
     # If beta = 0, the PolynomialExp is just a polynomial, so standard polynomial integration is sufficient
-    iszero(beta) && return CompoundPolynomialExp([beta => Polynomials.integrate(poly)])
+    iszero(beta) && return CompoundPolynomialExp(beta => Polynomials.integrate(poly))
 
     # Integrate the PolynomialExp term by term, given that x^n exp(-beta x) can be integrated exactly
-    sum(poly .* [integrated_monomial(n, beta) for n in 0:degree(pe)])
+    sum(n -> poly[n] * integrated_monomial(n, beta), 0:degree(pe))
 end
 
 
-integrate(cpe::CompoundPolynomialExp) = sum([integrate(PolynomialExp(poly, beta)) for (beta, poly) in cpe.polynomials]) # Integrate the CompoundPolynomialExp term by term
+integrate(cpe::CompoundPolynomialExp) = sum((beta, poly) -> integrate(PolynomialExp(poly, beta)), cpe.polynomials) # Integrate the CompoundPolynomialExp term by term
 
 I0_form(cpe::CompoundPolynomialExp) = integrate(cpe)
 I1_form(cpe::CompoundPolynomialExp) = integrate(cpe * Polynomial([0, 1]))
