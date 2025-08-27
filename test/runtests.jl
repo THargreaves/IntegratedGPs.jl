@@ -60,7 +60,7 @@ end
     CPE = CompoundPolynomialExp
 
     functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8),  0:1E-1:5)
-    integrals_match(f::CPE) = functions_match(integrate(f), (x) -> hquadrature((y) -> f(y), 0.0, x)[1])
+    integrals_match(f::CPE) = functions_match(integrate(f), x -> hquadrature(y -> f(y), 0.0, x)[1])
 
     # Test that constants integrate correctly
     const_val = 5.345

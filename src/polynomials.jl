@@ -27,7 +27,7 @@ degree(pe::PolynomialExp) = Polynomials.degree(pe.polynomial)
 (cpe::CompoundPolynomialExp)(x) = sum([PolynomialExp(poly, beta)(x) for (beta, poly) in cpe.polynomials])
 
 CompoundPolynomialExp(itr::Vector{Pair{Complex{T}, PT}}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} = CompoundPolynomialExp(Dict(itr))
-CompoundPolynomialExp(itr::Vector{Pair{T, PT}}) where {T, T2, PT <: Polynomial{T2}} = CompoundPolynomialExp(Dict(map((k, v) -> (complex(float(k)), Polynomial{complex(float(T2))}(v)), itr)))
+CompoundPolynomialExp(itr::Vector{Pair{T, PT}}) where {T <: AbstractFloat, T2, PT <: Polynomial{T2}} = CompoundPolynomialExp(Dict([complex(float(k)) => Polynomial{complex(float(T2))}(v) for (k, v) in itr]))
 CompoundPolynomialExp(itr::Vector{Pair{Complex{T}, PT}}) where {T <: AbstractFloat, PT <: Vector{Complex{T}}} = CompoundPolynomialExp(Dict([(k, Polynomial(v)) for (k, v) in itr]))
 CompoundPolynomialExp(itr::Vector{Pair{T, PT}}) where {T, T2, PT <: Vector{T2}} = CompoundPolynomialExp(Dict([(complex(float(k)), Polynomial(complex.(float.(v)))) for (k, v) in itr]))
 
@@ -82,7 +82,7 @@ function integrate(pe::PolynomialExp)
 end
 
 
-integrate(cpe::CompoundPolynomialExp) = sum((beta, poly) -> integrate(PolynomialExp(poly, beta)), cpe.polynomials) # Integrate the CompoundPolynomialExp term by term
+integrate(cpe::CompoundPolynomialExp) = sum([integrate(PolynomialExp(poly, beta)) for (beta, poly) in cpe.polynomials]) # Integrate the CompoundPolynomialExp term by term
 
 I0_form(cpe::CompoundPolynomialExp) = integrate(cpe)
 I1_form(cpe::CompoundPolynomialExp) = integrate(cpe * Polynomial([0, 1]))
@@ -103,7 +103,7 @@ function materntocpe(ν, ρ, σ2)
 end
 
 # Determine a Matern Mixture with the same closed-form as a given CPE using a simple form of Gaussian elimination in the space of PolynomialExps
-function cpetomaternmixture(cpe::CompoundPolynomialExp)
+function cpetomaternmixture(cpe::CompoundPolynomialExp{T, PT}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
     poly_degs = [Polynomials.degree(poly) for (beta, poly) in cpe.polynomials]
     num_terms = sum(poly_degs .+ 1)
     matern_mixture = Vector{CPEMaternGP}(undef, num_terms)
@@ -111,7 +111,7 @@ function cpetomaternmixture(cpe::CompoundPolynomialExp)
     for (ind, (beta, poly)) in enumerate(cpe.polynomials)
         temp_poly = poly 
         for p in poly_degs[ind]:-1:0
-            ν = p + 0.5
+            ν::Complex{T} = p + 0.5
             ρ = sqrt(2ν) / beta
 
             base_cpe = materntocpe(ν, ρ, 1.0)
