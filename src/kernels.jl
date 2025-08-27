@@ -154,9 +154,9 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
 end
 
 struct IntegratedCPEMaternGP{T, PT <: Polynomial{Complex{T}}} <: AbstractIntegratedMaternGP
-    ν::T
-    ρ::T
-    σ2::T
+    ν::Complex{T}
+    ρ::Complex{T}
+    σ2::Complex{T}
 
     # Store the CPE closed-forms for I0 and I1 
     I0_cpe::CompoundPolynomialExp{T, PT}
@@ -173,7 +173,7 @@ function IntegratedCPEMaternGP(gp::CPEMaternGP{T}; cache_size=1000) where {T}
 
     I0_cache = LRU{T,T}(; maxsize=cache_size)
     I1_cache = LRU{T,T}(; maxsize=cache_size)
-    return IntegratedCPEMaternGP{T}(gp.ν, gp.ρ, gp.σ2, I0_cpe, I1_cpe, I0_cache, I1_cache)
+    return IntegratedCPEMaternGP(gp.ν, gp.ρ, gp.σ2, I0_cpe, I1_cpe, I0_cache, I1_cache)
 end
 
 _I0(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I0_cpe(t)

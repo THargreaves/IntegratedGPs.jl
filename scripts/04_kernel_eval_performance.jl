@@ -22,10 +22,13 @@ evals_cpe = evals_per_second(() -> cpe_poly(1.0))
 evals_poly = evals_per_second(() -> poly_poly(1.0))
 evals_pure = evals_per_second(() -> pure_poly(1.0))
 
+# TODO: CPE Evaluation seems to be way too slow across the board.
+
 println("Polynomials")
 println("CPE:  $(round(evals_cpe, sigdigits=SIGDIGITS))/s")
 println("Poly: $(round(evals_poly, sigdigits=SIGDIGITS))/s")
 println("Pure: $(round(evals_pure, sigdigits=SIGDIGITS))/s")
+println("")
 
 pexp_foo(x) = (1 + 2 * x + 3 * x * x) * exp(-x) 
 cpe_poly = PolynomialExp([1, 2, 3], 1)
@@ -36,6 +39,7 @@ evals_foo = evals_per_second(() -> pexp_foo(1.0))
 println("PolyExp")
 println("PolyExp:  $(round(evals_cpe, sigdigits=SIGDIGITS))/s")
 println("Foo:      $(round(evals_foo, sigdigits=SIGDIGITS))/s")
+println("")
 
 
 
@@ -51,6 +55,7 @@ evals_cpe = evals_per_second(() -> kernel(gp_cpe, 0.0, 1.0))
 println("Standard kernel:")
 println("General:   $(round(evals_gen, sigdigits=SIGDIGITS))/s")
 println("CPE:       $(round(evals_cpe, sigdigits=SIGDIGITS))/s")
+println("")
 
 
 naive_igp_gen = Integrated(gp_gen)
@@ -71,3 +76,4 @@ println("Naive CPE:     $(round(evals_naive_cpe, sigdigits=SIGDIGITS))/s")
 println("General:       $(round(evals_gen, sigdigits=SIGDIGITS))/s")
 println("CPE:           $(round(evals_cpe, sigdigits=SIGDIGITS))/s")
 println("Cached:        $(round(evals_cache, sigdigits=SIGDIGITS))/s")
+println("")
