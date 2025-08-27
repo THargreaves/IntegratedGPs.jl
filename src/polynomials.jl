@@ -15,7 +15,17 @@ PolynomialExp(arr::Vector{T}, beta::Complex{T}) where T <: Integer = PolynomialE
 PolynomialExp(arr::Vector{T1}, beta::T2) where {T1, T2 <: Real} = PolynomialExp(arr, complex(beta))
 PolynomialExp(c::T) where {T <: Number} = PolynomialExp([c], zero(T))
 
-(pe::PolynomialExp)(x) = pe.polynomial(x) * exp(-pe.beta * x);
+function fast_poly(poly::PT, x::T) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
+    res = 0
+    for n in Polynomials.degree(poly):-1:0
+        res *= x 
+        res += poly[n]
+    end
+    res
+end
+
+#(pe::PolynomialExp)(x) = pe.polynomial(x) * exp(-pe.beta * x);
+(pe::PolynomialExp)(x) = fast_poly(pe.polynomial, x) * exp(-pe.beta * x);
 
 Base.oneunit(::Type{PolynomialExp{T}}) where {T} = PolynomialExp(oneunit(Complex{T}))
 Base.zero(::Type{PolynomialExp{T}}) where {T} = PolynomialExp(zero(Complex{T}))
@@ -26,7 +36,14 @@ end;
 Base.:/(pe::PolynomialExp, c::Number) = PolynomialExp(pe.polynomial / c, pe.beta);
 degree(pe::PolynomialExp) = Polynomials.degree(pe.polynomial)
 
-(cpe::CompoundPolynomialExp)(x) = sum([PolynomialExp(poly, beta)(x) for (beta, poly) in cpe.polynomials])
+#(cpe::CompoundPolynomialExp)(x) = sum([PolynomialExp(poly, beta)(x) for (beta, poly) in cpe.polynomials])
+function (cpe::CompoundPolynomialExp)(x) 
+    s = 0
+    for (beta, poly) in cpe.polynomials
+        s += fast_poly(poly, x) * exp(-beta * x)
+    end
+    s
+end
 
 CompoundPolynomialExp(itr::Vector{Pair{Complex{T}, PT}}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} = CompoundPolynomialExp(Dict(itr))
 CompoundPolynomialExp(itr::Vector{Pair{T, PT}}) where {T <: AbstractFloat, T2, PT <: Polynomial{T2}} = CompoundPolynomialExp(Dict([complex(float(k)) => Polynomial{complex(float(T2))}(v) for (k, v) in itr]))
@@ -117,7 +134,7 @@ materntocpe(gp::MaternGP) = materntocpe(gp.ν, gp.ρ, gp.σ2)
 materntocpe(gp::CPEMaternGP) = gp.cpe
 # In the specific case when ν = p + 0.5 (p ∈ Z), the Matern kernel can be evaluated exactly 
 # as a CompoundPolynomialExp
-function materntocpe(ν, ρ, σ2)
+function materntocpe(ν::T, ρ::T, σ2::T) where {T}
     !isinteger(ν - 0.5) && error("Provided Matern kernel does not have a CPE kernel.")
 
     p = Int(ν - 0.5)
@@ -143,11 +160,11 @@ function cpetomaternmixture(cpe::CompoundPolynomialExp{T, PT}) where {T <: Abstr
         temp_poly = poly
         for p in poly_degs[ind]:-1:0
             ν::Complex{T} = p + 0.5
-            ρ = sqrt(2ν) / beta
+            ρ::Complex{T} = sqrt(2ν) / beta
 
-            base_cpe = materntocpe(ν, ρ, 1.0)
+            base_cpe = materntocpe(ν, ρ, Complex{T}(1))
             base_poly = only(values(base_cpe.polynomials))
-            σ2 = temp_poly[p] / base_poly[p]
+            σ2::Complex{T} = temp_poly[p] / base_poly[p]
 
             temp_poly -= σ2 * base_poly
 
@@ -229,7 +246,7 @@ function fit_cov(ssm::SSM)
     for t in 1:N
         v[t] = only(ssm.H * ssm_cov * ssm.H')
         for (ind, pe) in enumerate(basis)
-            M[t, ind] = pe(t)
+            M[t, ind] = pe(float(t))
         end
 
         ssm_cov = ssm.A * ssm_cov
