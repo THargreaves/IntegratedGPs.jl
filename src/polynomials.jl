@@ -38,7 +38,9 @@ CompoundPolynomialExp(p::Pair{T, PT}) where {T, T2, PT <: Polynomial{T2}} = Comp
 CompoundPolynomialExp(pe::PolynomialExp) = CompoundPolynomialExp(pe.beta => pe.polynomial)
 
 CompoundPolynomialExp(c::T) where T <: Number = CompoundPolynomialExp(zero(complex(float(T))) => Polynomial{complex(float(T))}([c]))
-Base.zero(::Type{CompoundPolynomialExp{T, PT}}) where {T <: AbstractFloat, PT <:Polynomial{Complex{T}}} = CompoundPolynomialExp(T(0) => [T(0)])
+
+Base.oneunit(::Type{CompoundPolynomialExp{T, PT}}) where {T <: AbstractFloat, PT <:Polynomial{Complex{T}}} = CompoundPolynomialExp(oneunit(T))
+Base.zero(::Type{CompoundPolynomialExp{T, PT}}) where {T <: AbstractFloat, PT <:Polynomial{Complex{T}}} = CompoundPolynomialExp{T, PT}(Dict())
 
 function Base.isequal(a::CompoundPolynomialExp, b::CompoundPolynomialExp)
     return issetequal(keys(a.polynomials), keys(b.polynomials)) && all([
