@@ -7,18 +7,17 @@ using TestItemRunner
 @testitem "Basic CPE operations" begin
     using IntegratedMaternGPs
     using Polynomials
-    
+
     import Base: isapprox
 
     PE = PolynomialExp
     CPE = CompoundPolynomialExp
 
     # Test that adding PolynomialExp terms gives the expected CompoundPolynomialExp
-    a = PE([1, 2, 3],  1 + 3im) + 
-        PE([4, 5, 6], -2 - 5im)
+    a = PE([1, 2, 3], 1 + 3im) + PE([4, 5, 6], -2 - 5im)
     expected_a = CPE([1 + 3im => [1, 2, 3], -2 - 5im => [4, 5, 6]])
-    
-    b = PE([-2.5, 0, 0.5, 0.9], 4 + 7im) + PE([ 2.1, 0.9, 4.3], -2 - 5im)
+
+    b = PE([-2.5, 0, 0.5, 0.9], 4 + 7im) + PE([2.1, 0.9, 4.3], -2 - 5im)
     expected_b = CPE([4 + 7im => [-2.5, 0, 0.5, 0.9], -2 - 5im => [2.1, 0.9, 4.3]])
 
     @test isequal(a, expected_a) && isequal(b, expected_b)
@@ -26,14 +25,11 @@ using TestItemRunner
     # Test that adding CompoundPolynomialExp terms gives the expected CompoundPolynomialExp
     c = a + b
     expected_c = CPE([
-                         1 + 3im => [   1,   2,    3], 
-                        -2 - 5im => [ 6.1, 5.9, 10.3], 
-                         4 + 7im => [-2.5,   0,  0.5, 0.9]
-                    ])
+        1 + 3im => [1, 2, 3], -2 - 5im => [6.1, 5.9, 10.3], 4 + 7im => [-2.5, 0, 0.5, 0.9]
+    ])
     @test isequal(c, expected_c)
 
     functions_match(f, g) = all(x -> isapprox(f(x), g(x)), 0:1E-1:5)
-
 
     # Test that floats are correctly converted to CPEs and evaluating a constant expression gives the expected result
     const_val = 4.0
@@ -47,11 +43,12 @@ using TestItemRunner
 
     # Test that a general CPE matches the explicit function it corresponds to 
     generic_cpe = CPE([0 => [2, 3, 0, -5], 1.5 => [2.1, 3.2], 4.8 => [0, 0, 5]])
-    equiv_foo(x) = (2 + 3 * x - 5 * x^3) + (2.1 + 3.2 * x) * exp(-1.5 * x) + 5 * x^2 * exp(-4.8 * x)
-    @test functions_match(generic_cpe, equiv_foo)  
+    equiv_foo(x) =
+        (2 + 3 * x - 5 * x^3) + (2.1 + 3.2 * x) * exp(-1.5 * x) + 5 * x^2 * exp(-4.8 * x)
+    @test functions_match(generic_cpe, equiv_foo)
 end
 
-@testitem "CPE Integration" begin 
+@testitem "CPE Integration" begin
     using IntegratedMaternGPs
     using HCubature
 
@@ -120,9 +117,12 @@ end
     gp = AbstractMaternGP(ν, ρ, σ2)
     igp = integrate(gp)
 
-    @test functions_match(t -> I0(igp, t), t -> hquadrature(s -> kernel(gp, 0, s), 0.0, t)[1])
-    @test functions_match(t -> I1(igp, t), t -> hquadrature(s -> s * kernel(gp, 0, s), 0.0, t)[1])
-
+    @test functions_match(
+        t -> I0(igp, t), t -> hquadrature(s -> kernel(gp, 0, s), 0.0, t)[1]
+    )
+    @test functions_match(
+        t -> I1(igp, t), t -> hquadrature(s -> s * kernel(gp, 0, s), 0.0, t)[1]
+    )
 end
 
 @testitem "Integrated Matern Kernel" begin
@@ -319,10 +319,244 @@ end
     @test S_sparse ≈ C_dense
 end
 
+@testitem "Shifting Offset Transition Mean Update" begin
+    using IntegratedMaternGPs
+    using LinearAlgebra
+    using StableRNGs
+
+    n = 10
+    rng = StableRNG(1234)
+
+    f = rand(rng, n) / (n + 1)  # Ensure sum(f) < 1
+    f̄ = sum(f)
+    F_sparse = ShiftingOffsetTransition(f)
+
+    F_dense = zeros(n + 1, n + 1)
+    F_dense[1, 1:n] = f
+    F_dense[1, n + 1] = 1 - f̄
+    F_dense[2:end, 1:(end - 1)] .= Matrix(I, n, n)
+
+    # Out-of-place multiplication
+    x = rand(rng, n + 1)
+    y_sparse = F_sparse * x
+    y_dense = F_dense * x
+    @test y_sparse ≈ y_dense
+
+    # In-place multiplication
+    x_sparse = copy(x)
+    mul!(x_sparse, F_sparse, x_sparse)
+    @test x_sparse ≈ y_dense
+end
+
+@testitem "Shifting Offset Transition Covariance Update" begin
+    using IntegratedMaternGPs
+    using LinearAlgebra
+    using StableRNGs
+
+    n = 10
+    rng = StableRNG(1234)
+
+    f = rand(rng, n) / (n + 1)  # Ensure sum(f) < 1
+    f̄ = sum(f)
+    F_sparse = ShiftingOffsetTransition(f)
+
+    F_dense = zeros(n + 1, n + 1)
+    F_dense[1, 1:n] = f
+    F_dense[1, n + 1] = 1 - f̄
+    F_dense[2:end, 1:(end - 1)] .= Matrix(I, n, n)
+
+    # Construct symmetric PSD matrix
+    S = rand(rng, n + 1, n + 1)
+    S = Symmetric(S * S' + I)
+
+    # Out-of-place quadratic form
+    C_sparse = quadratic_form(F_sparse, S)
+    C_dense = F_dense * S * F_dense'
+    @test C_sparse ≈ C_dense
+
+    # In-place quadratic form
+    S_sparse = deepcopy(S)
+    quadratic_form!(S_sparse, F_sparse, S_sparse)
+    @test S_sparse ≈ C_dense
+end
+
+@testitem "Expanding Offset Transition Mean Update" begin
+    using IntegratedMaternGPs
+    using LinearAlgebra
+    using StableRNGs
+
+    n = 10
+    rng = StableRNG(1234)
+
+    f = rand(rng, n) / (n + 1)  # Ensure sum(f) < 1
+    f̄ = sum(f)
+    F_sparse = ExpandingOffsetTransition(f)
+
+    F_dense = zeros(n + 2, n + 1)
+    F_dense[1, 1:n] = f
+    F_dense[1, n + 1] = 1 - f̄
+    F_dense[2:end, :] .= Matrix(I, n + 1, n + 1)
+
+    # Out-of-place multiplication
+    x = rand(rng, n + 1)
+    y_sparse = F_sparse * x
+    y_dense = F_dense * x
+    @test y_sparse ≈ y_dense
+
+    # In-place multiplication
+    x_sparse = Vector{Float64}(undef, n + 2)
+    x_sparse[2:end] .= x
+    mul!(x_sparse, F_sparse, @view x_sparse[2:end])
+    @test x_sparse ≈ y_dense
+end
+
+@testitem "Expanding Offset Transition Covariance Update" begin
+    using IntegratedMaternGPs
+    using LinearAlgebra
+    using StableRNGs
+
+    n = 10
+    rng = StableRNG(1234)
+
+    f = rand(rng, n) / (n + 1)  # Ensure sum(f) < 1
+    f̄ = sum(f)
+    F_sparse = ExpandingOffsetTransition(f)
+
+    F_dense = zeros(n + 2, n + 1)
+    F_dense[1, 1:n] = f
+    F_dense[1, n + 1] = 1 - f̄
+    F_dense[2:end, :] .= Matrix(I, n + 1, n + 1)
+
+    # Construct symmetric PSD matrix
+    S = rand(rng, n + 1, n + 1)
+    S = Symmetric(S * S' + I)
+
+    # Out-of-place quadratic form
+    C_sparse = quadratic_form(F_sparse, S)
+    C_dense = F_dense * S * F_dense'
+    @test C_sparse ≈ C_dense
+
+    # In-place quadratic form
+    S_sparse = Symmetric(zeros(n + 2, n + 2))
+    quadratic_form!(S_sparse, F_sparse, S)
+    @test S_sparse ≈ C_dense
+end
+
+@testitem "Expanding Markovian Transition Test" begin
+    using IntegratedMaternGPs
+    using LinearAlgebra
+    using StableRNGs
+
+    n = 10
+    rng = StableRNG(1234)
+
+    f = rand(rng, n - 1) / n  # Ensure sum(f) < 1
+    f̄ = sum(f)
+    F_sparse = ExpandingMarkovianTransition(f)
+
+    F_dense = zeros(n + 1, n)
+    F_dense[1, 1:(n - 1)] = f
+    F_dense[1, n] = 1 - f̄
+    F_dense[2:end, :] .= Matrix(I, n, n)
+
+    # Verify all elements match
+    @test all(F_sparse[i, j] == F_dense[i, j] for i in 1:(n + 1), j in 1:n)
+
+    ###########################
+    #### MAT-VEC MUL TESTS ####
+    ###########################
+
+    # Out-of-place multiplication
+    x = rand(rng, n)
+    y_sparse = F_sparse * x
+    y_dense = F_dense * x
+    @test y_sparse ≈ y_dense
+
+    # In-place multiplication
+    x_sparse = Vector{Float64}(undef, n + 1)
+    x_sparse[2:end] .= x
+    mul!(x_sparse, F_sparse, @view x_sparse[2:end])
+    @test x_sparse ≈ y_dense
+
+    ##############################
+    #### QUADRATIC FORM TESTS ####
+    ##############################
+
+    # Construct symmetric PSD matrix
+    S = rand(rng, n, n)
+    S = Symmetric(S * S' + I)
+
+    # Out-of-place quadratic form
+    C_sparse = quadratic_form(F_sparse, S)
+    C_dense = F_dense * S * F_dense'
+    @test C_sparse ≈ C_dense
+
+    # In-place quadratic form
+    S_sparse_data = Matrix{Float64}(undef, n + 1, n + 1)
+    S_sparse_data[2:end, 2:end] .= S
+    S_sparse = Symmetric(S_sparse_data)
+    S_sparse_sub = Symmetric(@view S_sparse_data[2:end, 2:end])
+    quadratic_form!(S_sparse, F_sparse, S_sparse_sub)
+    @test S_sparse ≈ C_dense
+end
+
+@testitem "Shifting Markovian Transition Test" begin
+    using IntegratedMaternGPs
+    using LinearAlgebra
+    using StableRNGs
+
+    n = 10
+    rng = StableRNG(1234)
+
+    f = rand(rng, n - 1) / n  # Ensure sum(f) < 1
+    f̄ = sum(f)
+    F_sparse = ShiftingMarkovianTransition(f)
+
+    F_dense = zeros(n, n)
+    F_dense[1, 1:(n - 1)] = f
+    F_dense[1, n] = 1 - f̄
+    F_dense[2:n, 1:(n - 1)] .= Matrix(I, n - 1, n - 1)
+
+    # Verify all elements match
+    @test all(F_sparse[i, j] == F_dense[i, j] for i in 1:n, j in 1:n)
+
+    ###########################
+    #### MAT-VEC MUL TESTS ####
+    ###########################
+
+    # Out-of-place multiplication
+    x = rand(rng, n)
+    y_sparse = F_sparse * x
+    y_dense = F_dense * x
+    @test y_sparse ≈ y_dense
+
+    # In-place multiplication
+    x_sparse = copy(x)
+    mul!(x_sparse, F_sparse, x_sparse)
+    @test x_sparse ≈ y_dense
+
+    ##############################
+    #### QUADRATIC FORM TESTS ####
+    ##############################
+
+    # Construct symmetric PSD matrix
+    S = rand(rng, n, n)
+    S = Symmetric(S * S' + I)
+
+    # Out-of-place quadratic form
+    C_sparse = quadratic_form(F_sparse, S)
+    C_dense = F_dense * S * F_dense'
+    @test C_sparse ≈ C_dense
+
+    # In-place quadratic form
+    S_sparse = deepcopy(S)
+    quadratic_form!(S_sparse, F_sparse, S_sparse)
+    @test S_sparse ≈ C_dense
+end
 
 @testitem "Matern to CPE" begin
     using IntegratedMaternGPs
-    
+
     import Base: isapprox
 
     CPE = CompoundPolynomialExp
@@ -344,7 +578,6 @@ end
     target_p2 = CPE(sqrt(5) => [1, sqrt(5), 5 / 3])
     @test isequal(materntocpe(gp_p2), target_p2)
 
-
     # Test that some more general Matern GP has the same covariance as its corresponding CPE
     ν = 5.5
     ρ = 3.2
@@ -357,9 +590,9 @@ end
 
 @testitem "CPE to Matern Mixture" begin
     using IntegratedMaternGPs
-    
+
     import Base: isapprox
-    
+
     CPE = CompoundPolynomialExp
 
     functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
@@ -381,7 +614,9 @@ end
     @test functions_match(t -> kernel(candidate_p2, 0.0, t), t -> kernel(target_p2, 0.0, t))
 
     # Test that some more general CPE has the same form as its Matern Mixture
-    cpe_general = CPE([0.1 => [9.3, 1.23], 1.542 => [8.432, 0.32, 7.543], 6.222 => [0.0, 1.11, 0.234]])
+    cpe_general = CPE([
+        0.1 => [9.3, 1.23], 1.542 => [8.432, 0.32, 7.543], 6.222 => [0.0, 1.11, 0.234]
+    ])
     candidate_general = cpetomaternmixture(cpe_general)
     @test functions_match(cpe_general, t -> kernel(candidate_general, 0.0, t))
 end
@@ -410,14 +645,19 @@ end
     general_A = [0.52 -0.32; -0.20 0.60]
     general_Q = [3.58 1.78; 1.78 4.56]
     general_H = [5.43 -0.67;]
-    any(z -> abs(z) > 1, eigen(general_A).values) && error("A matrix should not have poles outside the unit circle; found $(eigen(general_A).values) with magnitude $([abs(z) for z in eigen(general_A).values])")
+    any(z -> abs(z) > 1, eigen(general_A).values) && error(
+        "A matrix should not have poles outside the unit circle; found $(eigen(general_A).values) with magnitude $([abs(z) for z in eigen(general_A).values])"
+    )
     det(general_Q) <= 0 && error("Q must be positive definite.")
 
     general_ssm = SSM(general_A, general_Q, general_H)
     general_kernel = ssm2GPKernel(general_ssm)
     radial_σ2 = only(general_H * lyapd(general_A, general_Q) * general_H')
 
-    @test functions_match_at_int(t -> real(kernel(general_kernel, 0.0, t)), t -> radial_σ2 * real(only(general_H * general_A^t * general_H')))
-    
+    @test functions_match_at_int(
+        t -> real(kernel(general_kernel, 0.0, t)),
+        t -> radial_σ2 * real(only(general_H * general_A^t * general_H')),
+    )
+
     # TODO: Implement the case corresponding to complex Matern arguments
 end
