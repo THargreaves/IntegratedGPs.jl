@@ -4,7 +4,7 @@ import Struve: struvel
 using LRUCache
 
 export AbstractMaternGP, AbstractIntegratedMaternGP, MaternGP, IntegratedMaternGP, 
-    CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate, I0, I1
+    CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate, I0, I1, Integrated
 export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
@@ -25,7 +25,7 @@ function kernel(gp_mixture::Vector{T}, s, t) where T <: AbstractGPKernel
 end
 
 function kernel(igp::Integrated{T}, s, t) where {T <: AbstractGPKernel}
-    return hcubature((s, t) -> kernel(igp.base_kernel, s, t), [0.0, 0.0], [s, t])
+    return hcubature(x -> kernel(igp.base_kernel, x[1], x[2]), [0.0, 0.0], [s, t])
 end
 
 
@@ -64,21 +64,23 @@ struct MaternGP{T} <: AbstractMaternGP
     σ2::T
 end
 
-struct CPEMaternGP{T} <: AbstractMaternGP
-    ν::T
-    ρ::T
-    σ2::T
-    cpe::CompoundPolynomialExp
+struct CPEMaternGP{T <: Union{AbstractFloat, Complex}, PT <: Polynomial{Complex{T}}} <: AbstractMaternGP
+    ν::Complex{T}
+    ρ::Complex{T}
+    σ2::Complex{T}
+    cpe::CompoundPolynomialExp{T, PT}
 
-    CPEMaternGP(ν::T, ρ::T, σ2::T, cpe::CompoundPolynomialExp) where {T} = !isinteger(ν - 0.5) ? error("CPE Matern GP needs ν to be of the form p + 0.5; given $(ν)") : new{T}(ν, ρ, σ2, cpe) 
+    function CPEMaternGP(ν::Complex{T}, ρ::Complex{T}, σ2::Complex{T}, cpe::CompoundPolynomialExp{T, PT}) where {T, PT <: Polynomial{Complex{T}}} 
+        !isinteger(ν - 0.5) ? error("CPE Matern GP needs ν to be of the form p + 0.5; given $(ν)") : new{T, PT}(ν, ρ, σ2, cpe)
+    end 
 end
 
-function CPEMaternGP(ν, ρ, σ2)
+function CPEMaternGP(ν::T, ρ::T, σ2::T) where {T}
     cpe = materntocpe(ν, ρ, σ2)
-    CPEMaternGP(ν, ρ, σ2, cpe)
+    CPEMaternGP(complex(ν), complex(ρ), complex(σ2), cpe)
 end
 
-AbstractMaternGP(ν, ρ, σ2) = isinteger(ν - 0.5) ? CPEMaternGP(ν, ρ, σ2) : MaternGP(ν, ρ, σ2)
+AbstractMaternGP(ν::T, ρ::T, σ2::T) where {T <: AbstractFloat} = isinteger(ν - 0.5) ? CPEMaternGP(ν, ρ, σ2) : MaternGP(ν, ρ, σ2)
 
 isapprox(a::MaternGP, b::MaternGP; rtol=1E-8) = isapprox(a.ν,  b.ν;  rtol) && 
                                                 isapprox(a.ρ,  b.ρ;  rtol) && 
@@ -151,14 +153,14 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     return gp.C1_const - gp.C1_bessel * x^(ν + 1) * besselk(ν + 1, x)
 end
 
-struct IntegratedCPEMaternGP{T} <: AbstractIntegratedMaternGP
+struct IntegratedCPEMaternGP{T, PT <: Polynomial{Complex{T}}} <: AbstractIntegratedMaternGP
     ν::T
     ρ::T
     σ2::T
 
     # Store the CPE closed-forms for I0 and I1 
-    I0_cpe::CompoundPolynomialExp
-    I1_cpe::CompoundPolynomialExp
+    I0_cpe::CompoundPolynomialExp{T, PT}
+    I1_cpe::CompoundPolynomialExp{T, PT}
 
     # LRU caches for evaluations of I0 and I1
     I0_cache::LRU{T,T}
