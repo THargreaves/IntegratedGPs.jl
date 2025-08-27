@@ -48,7 +48,7 @@ d = 20
 
 function simulate(
     rng::AbstractRNG,
-    gp::IntegratedMaternGP,
+    gp::AbstractIntegratedMaternGP,
     τ0::Float64,
     τ::Float64,
     K::Int,

@@ -88,11 +88,11 @@ end
     ν2 = 1.5
     ρ = 0.8
     σ2 = 5.4
-    gp1 = MaternGP(ν1, ρ, σ2)
-    gp2 = MaternGP(ν2, ρ, σ2)
+    gp1 = AbstractMaternGP(ν1, ρ, σ2)
+    gp2 = AbstractMaternGP(ν2, ρ, σ2)
 
-    @test typeof(gp1) <: MaternGP && isa(gp1, GeneralMaternGP)
-    @test typeof(gp2) <: MaternGP && isa(gp2, CPEMaternGP)
+    @test typeof(gp1) <: AbstractMaternGP && isa(gp1, GeneralMaternGP)
+    @test typeof(gp2) <: AbstractMaternGP && isa(gp2, CPEMaternGP)
 
     # Test if the two Matern GP cases have the same kernel
     ν = 3.5
@@ -117,7 +117,7 @@ end
     ρ = 2.1
     σ2 = 5.3
 
-    gp = MaternGP(ν, ρ, σ2)
+    gp = AbstractMaternGP(ν, ρ, σ2)
     igp = integrate(gp)
 
     @test functions_match(t -> I0(igp, t), t -> hquadrature(s -> kernel(gp, 0, s), 0.0, t)[1])
