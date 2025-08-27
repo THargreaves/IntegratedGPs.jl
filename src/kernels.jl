@@ -1,6 +1,6 @@
-import Bessels: besselk
+import Bessels: besselk, besselkx, besselix
 import SpecialFunctions: gamma
-import Struve: struvel
+using Struve
 using LRUCache
 
 export MaternGP, IntegratedMaternGP, GeneralMaternGP, IntegratedGeneralMaternGP, CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate, I0, I1
