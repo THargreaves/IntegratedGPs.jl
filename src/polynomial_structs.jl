@@ -3,11 +3,11 @@ using Polynomials
 import Base: isapprox
 
 # Representation of Σ c_i * x^{n_i} exp(-beta x)
-struct PolynomialExp
-    polynomial::Polynomial
-    beta::Number
+struct PolynomialExp{T, PT <: Polynomial{T}}
+    polynomial::PT
+    beta::T
 end
 # Representation of Σ c_i * x^{n_i} exp(-beta_i x)
-struct CompoundPolynomialExp{T<:Number,P<:Polynomial}
-    polynomials::Dict{T,P}
+struct CompoundPolynomialExp{T,PT<:Polynomial{T}}
+    polynomials::Dict{T,PT}
 end
