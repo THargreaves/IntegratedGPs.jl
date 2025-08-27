@@ -23,7 +23,7 @@ function kernel(gp_mixture::Vector{T}, s, t) where T <: AbstractGPKernel
     sum(gp -> kernel(gp, s, t),  gp_mixture)
 end
 
-function kernel(igp::Integrated{T <: AbstractGPKernel}, s, t)
+function kernel(igp::Integrated{T}, s, t) where {T <: AbstractGPKernel}
     return hcubature((s, t) -> kernel(igp.base_kernel, s, t), [0.0, 0.0], [s, t])
 end
 

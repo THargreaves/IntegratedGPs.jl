@@ -5,26 +5,38 @@ export +, show, isequal, isapprox
 export integrate, materntocpe, cpetomaternmixture, ssm2GPKernel
 
 
-PolynomialExp(arr::Vector{T}, beta::Number) where T <: Number = PolynomialExp(Polynomial(arr), beta)
+PolynomialExp(arr::Vector{Complex{T}}, beta::Complex{T}) where T <: AbstractFloat = PolynomialExp(Polynomial(arr), beta)
+PolynomialExp(arr::Vector{T}, beta::Complex{T}) where T <: AbstractFloat = PolynomialExp(complex.(arr), beta)
+PolynomialExp(arr::Vector{T}, beta::T) where T <: Real = PolynomialExp(complex.(float.(arr)), complex(float(beta)))
+PolynomialExp(arr::Vector{Complex{T}}, beta::Complex{T}) where T <: Integer = PolynomialExp(float.(arr), float(beta))
+PolynomialExp(arr::Vector{T1}, beta::Complex{T2}) where {T1 <: Integer, T2 <: AbstractFloat} = PolynomialExp(float.(arr), beta)
+PolynomialExp(arr::Vector{T1}, beta::Complex{T2}) where {T1 <: AbstractFloat, T2 <: Integer} = PolynomialExp(arr, float(beta))
+PolynomialExp(arr::Vector{T}, beta::Complex{T}) where T <: Integer = PolynomialExp(float.(arr), float(beta))
+PolynomialExp(arr::Vector{T1}, beta::T2) where {T1, T2 <: Real} = PolynomialExp(arr, complex(beta))
+PolynomialExp(c::T) where {T <: Number} = PolynomialExp([c], zero(T))
+
 (pe::PolynomialExp)(x) = pe.polynomial(x) * exp(-pe.beta * x);
 
-Base.oneunit(::Type{PolynomialExp}) = PolynomialExp([1.0], 0.0)
-Base.zero(::Type{PolynomialExp}) = PolynomialExp([0], 0)
+Base.oneunit(::Type{PolynomialExp{T}}) where {T} = PolynomialExp(oneunit(Complex{T}))
+Base.zero(::Type{PolynomialExp{T}}) where {T} = PolynomialExp(zero(Complex{T}))
 Base.:*(c::Number, pe::PolynomialExp) = PolynomialExp(c * pe.polynomial, pe.beta);
 Base.:*(c::Number, cpe::CompoundPolynomialExp) = CompoundPolynomialExp([beta => c * poly for (beta, poly) in cpe.polynomials]);
 Base.:/(pe::PolynomialExp, c::Number) = PolynomialExp(pe.polynomial / c, pe.beta);
 degree(pe::PolynomialExp) = Polynomials.degree(pe.polynomial)
 
-(cpe::CompoundPolynomialExp)(x) = sum((beta, poly) -> PolynomialExp(poly, beta)(x), cpe.polynomials)
+(cpe::CompoundPolynomialExp)(x) = sum([PolynomialExp(poly, beta)(x) for (beta, poly) in cpe.polynomials])
 
-CompoundPolynomialExp(itr::Vector{Pair{T, P}}) where {T <: Number, P <: Polynomial} = CompoundPolynomialExp(Dict(itr))
-CompoundPolynomialExp(itr::Vector{Pair{T, P}}) where {T <: Number, P <: Vector} = CompoundPolynomialExp(Dict([(k, Polynomial(v)) for (k, v) in itr]))
-CompoundPolynomialExp(p::Pair{T, P}) where {T <: Number, P <: Vector} = CompoundPolynomialExp([p])
-CompoundPolynomialExp(p::Pair{T, P}) where {T <: Number, P <: Polynomial} = CompoundPolynomialExp([p])
+CompoundPolynomialExp(itr::Vector{Pair{Complex{T}, PT}}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} = CompoundPolynomialExp(Dict(itr))
+CompoundPolynomialExp(itr::Vector{Pair{T, PT}}) where {T, T2, PT <: Polynomial{T2}} = CompoundPolynomialExp(Dict(map((k, v) -> (complex(float(k)), Polynomial{complex(float(T2))}(v)), itr)))
+CompoundPolynomialExp(itr::Vector{Pair{Complex{T}, PT}}) where {T <: AbstractFloat, PT <: Vector{Complex{T}}} = CompoundPolynomialExp(Dict([(k, Polynomial(v)) for (k, v) in itr]))
+CompoundPolynomialExp(itr::Vector{Pair{T, PT}}) where {T, T2, PT <: Vector{T2}} = CompoundPolynomialExp(Dict([(complex(float(k)), Polynomial(complex.(float.(v)))) for (k, v) in itr]))
+
+CompoundPolynomialExp(p::Pair{T, PT}) where {T, T2, PT <: Vector{T2}} = CompoundPolynomialExp([p])
+CompoundPolynomialExp(p::Pair{T, PT}) where {T, T2, PT <: Polynomial{T2}} = CompoundPolynomialExp([p])
 CompoundPolynomialExp(pe::PolynomialExp) = CompoundPolynomialExp(pe.beta => pe.polynomial)
 
-CompoundPolynomialExp(c::Number) = CompoundPolynomialExp(0 => Polynomial([c]))
-Base.zero(::Type{CompoundPolynomialExp}) = CompoundPolynomialExp(0 => [0])
+CompoundPolynomialExp(c::T) where T <: Number = CompoundPolynomialExp(zero(complex(float(T))) => Polynomial{complex(float(T))}([c]))
+Base.zero(::Type{CompoundPolynomialExp{T, PT}}) where {T <: AbstractFloat, PT <:Polynomial{Complex{T}}} = CompoundPolynomialExp(T(0) => [T(0)])
 
 Base.isequal(a::CompoundPolynomialExp, b::CompoundPolynomialExp) = issetequal(keys(a.polynomials), keys(b.polynomials)) && all([Polynomials.isapprox(v, b.polynomials[k], rtol=1E-8) for (k, v) in a.polynomials])
 

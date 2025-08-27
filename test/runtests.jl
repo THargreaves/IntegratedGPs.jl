@@ -32,7 +32,7 @@ using TestItemRunner
                     ])
     @test isequal(c, expected_c)
 
-    functions_match(f, g) = all([isapprox(f(x), g(x)) for x in 0:1E-1:5])
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x)), 0:1E-1:5)
 
 
     # Test that floats are correctly converted to CPEs and evaluating a constant expression gives the expected result
@@ -59,7 +59,7 @@ end
 
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8),  0:1E-1:5)
     integrals_match(f::CPE) = functions_match(integrate(f), (x) -> hquadrature((y) -> f(y), 0.0, x)[1])
 
     # Test that constants integrate correctly
@@ -81,7 +81,7 @@ end
 
     import Base: isapprox
 
-    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
 
     # Test if the Matern GPs are separated into cases when ν = p + 0.5
     ν1 = 1.6
@@ -110,7 +110,7 @@ end
 
     import Base: isapprox
 
-    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
     
     # Test that the I0 and I1 functions provide the same answers as numerical methods
     ν = 4.3
@@ -327,7 +327,7 @@ end
 
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
 
     # The case ν = 0.5 is known exactly, test that it corresponds to the expected expression
     gp_p0 = MaternGP(0.5, 1.0, 1.0)
@@ -362,7 +362,7 @@ end
     
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
 
     # Take the known cases of Matern -> CPE and check that the inverse still matches
     cpe_p0 = CPE(1 => [1])
@@ -394,8 +394,8 @@ end
 
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1E-1:5])
-    functions_match_at_int(f, g) = all([isapprox(f(x), g(x), rtol=1E-8) for x in 0:1:10])
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1E-1:5)
+    functions_match_at_int(f, g) = all(x -> isapprox(f(x), g(x), rtol=1E-8), 0:1:10)
 
     # The AR(1) process has a known closed form covariance. Test that it matches the equivalent Matern Mixture.
     a = 0.9
@@ -410,7 +410,7 @@ end
     general_A = [0.52 -0.32; -0.20 0.60]
     general_Q = [3.58 1.78; 1.78 4.56]
     general_H = [5.43 -0.67;]
-    any([abs(z) > 1 for z in eigen(general_A).values]) && error("A matrix should not have poles outside the unit circle; found $(eigen(general_A).values) with magnitude $([abs(z) for z in eigen(general_A).values])")
+    any(z -> abs(z) > 1, eigen(general_A).values) && error("A matrix should not have poles outside the unit circle; found $(eigen(general_A).values) with magnitude $([abs(z) for z in eigen(general_A).values])")
     det(general_Q) <= 0 && error("Q must be positive definite.")
 
     general_ssm = SSM(general_A, general_Q, general_H)
