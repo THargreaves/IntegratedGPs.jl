@@ -8,9 +8,9 @@ export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
 abstract type AbstractGPKernel end
-abstract type AbstractStationaryGPKernel <: AbstractGPKernel end
+abstract type AbstractRadialGPKernel <: AbstractGPKernel end
 abstract type AbstractIntegratedGPKernel <: AbstractGPKernel end
-abstract type AbstractIntegratedStationaryGPKernel <: AbstractIntegratedGPKernel end
+abstract type AbstractIntegratedRadialGPKernel <: AbstractIntegratedGPKernel end
 
 struct Integrated{T <: AbstractGPKernel} <: AbstractIntegratedGPKernel
     base_kernel::T
@@ -28,23 +28,23 @@ function kernel(igp::Integrated{T <: AbstractGPKernel}, s, t)
 end
 
 
-function I0(gp::AbstractIntegratedStationaryGPKernel, t)
+function I0(gp::AbstractIntegratedRadialGPKernel, t)
     get!(gp.I0_cache, t) do
         _I0(gp, t)
     end
 end
-_I0(gp::AbstractIntegratedStationaryGPKernel, t) = error("The integrated stationary GP _I0 function has not been implemented.") 
+_I0(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _I0 function has not been implemented.") 
 
-function I1(gp::AbstractIntegratedStationaryGPKernel, t)
+function I1(gp::AbstractIntegratedRadialGPKernel, t)
     get!(gp.I1_cache, t) do
         _I1(gp, t)
     end
 end
-_I1(gp::AbstractIntegratedStationaryGPKernel, t) = error("The integrated stationary GP _I1 function has not been implemented.")
-I1(gp::AbstractIntegratedStationaryGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
+_I1(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _I1 function has not been implemented.")
+I1(gp::AbstractIntegratedRadialGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
 
-function kernel(gp::AbstractIntegratedStationaryGPKernel, s, t)
+function kernel(gp::AbstractIntegratedRadialGPKernel, s, t)
     Δ = abs(s - t)
     contribution(x) = x * I0(gp, x) - I1(gp, x)
 
@@ -52,8 +52,8 @@ function kernel(gp::AbstractIntegratedStationaryGPKernel, s, t)
 end
 
 
-abstract type AbstractMaternGP <: AbstractStationaryGPKernel end;
-abstract type AbstractIntegratedMaternGP <: AbstractIntegratedStationaryGPKernel end;
+abstract type AbstractMaternGP <: AbstractRadialGPKernel end;
+abstract type AbstractIntegratedMaternGP <: AbstractIntegratedRadialGPKernel end;
 
 struct GeneralMaternGP{T} <: AbstractMaternGP
     ν::T
