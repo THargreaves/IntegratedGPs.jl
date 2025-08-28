@@ -58,8 +58,9 @@ end
     CPE = CompoundPolynomialExp
 
     functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
-    integrals_match(f::CPE) =
-        functions_match(integrate(f), x -> hquadrature(y -> f(y), 0.0, x)[1])
+    integrals_match(f::CPE) = functions_match(
+        integrate(f), x -> hquadrature(y -> f(y), 0.0, x)[1]
+    )
 
     # Test that constants integrate correctly
     const_val = 5.345
@@ -135,6 +136,29 @@ end
     ρ = 2.0
     σ2 = 1.0
     gp = MaternGP(ν, ρ, σ2)
+    int_gp = integrate(gp)
+
+    # Test s ≠ t case
+    s, t = 0.8, 1.1
+    kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
+    kernel_analytical = kernel(int_gp, s, t)
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
+
+    # Test s = t case
+    s = t = 0.8
+    kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
+    kernel_analytical = kernel(int_gp, s, t)
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
+end
+
+@testitem "Integrated Matern Kernel" begin
+    using IntegratedMaternGPs
+    using HCubature
+
+    ν = 2.5
+    ρ = 2.0
+    σ2 = 1.0
+    gp = CPEMaternGP(ν, ρ, σ2)
     int_gp = integrate(gp)
 
     # Test s ≠ t case
