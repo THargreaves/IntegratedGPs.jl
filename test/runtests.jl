@@ -87,8 +87,8 @@ end
     ν2 = 1.5
     ρ = 0.8
     σ2 = 5.4
-    gp1 = AbstractMaternGP(ν1, ρ, σ2)
-    gp2 = AbstractMaternGP(ν2, ρ, σ2)
+    gp1 = constructmatern(ν1, ρ, σ2)
+    gp2 = constructmatern(ν2, ρ, σ2)
 
     @test typeof(gp1) <: AbstractMaternGP && isa(gp1, MaternGP)
     @test typeof(gp2) <: AbstractMaternGP && isa(gp2, CPEMaternGP)
@@ -116,7 +116,7 @@ end
     ρ = 2.1
     σ2 = 5.3
 
-    gp = AbstractMaternGP(ν, ρ, σ2)
+    gp = constructmatern(ν, ρ, σ2)
     igp = integrate(gp)
 
     @test functions_match(

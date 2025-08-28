@@ -13,7 +13,8 @@ export AbstractMaternGP,
     integrate,
     I0,
     I1,
-    Integrated
+    Integrated,
+    constructmatern
 export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
@@ -70,7 +71,7 @@ struct MaternGP{T} <: AbstractMaternGP
     σ2::T
 end
 
-struct CPEMaternGP{T<:Complex,PT<:Polynomial{T}} <: AbstractMaternGP
+struct CPEMaternGP{T<:Complex,PT<:ImmutablePolynomial{T}} <: AbstractMaternGP
     ν::T
     ρ::T
     σ2::T
@@ -78,7 +79,7 @@ struct CPEMaternGP{T<:Complex,PT<:Polynomial{T}} <: AbstractMaternGP
 
     function CPEMaternGP(
         ν::T, ρ::T, σ2::T, cpe::CompoundPolynomialExp{T,PT}
-    ) where {T,PT<:Polynomial{T}}
+    ) where {T,PT<:ImmutablePolynomial{T}}
         if !isinteger(ν - 0.5)
             error("CPE Matern GP needs ν to be of the form p + 0.5; given $(ν)")
         else
@@ -92,7 +93,7 @@ function CPEMaternGP(ν::T, ρ::T, σ2::T) where {T}
     return CPEMaternGP(complex(ν), complex(ρ), complex(σ2), cpe)
 end
 
-function AbstractMaternGP(ν::T, ρ::T, σ2::T) where {T<:AbstractFloat}
+function constructmatern(ν::T, ρ::T, σ2::T) where {T<:AbstractFloat}
     return isinteger(ν - 0.5) ? CPEMaternGP(ν, ρ, σ2) : MaternGP(ν, ρ, σ2)
 end
 
@@ -171,7 +172,8 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     return gp.C1_const - gp.C1_bessel * x^(ν + 1) * besselk(ν + 1, x)
 end
 
-struct IntegratedCPEMaternGP{T<:Complex,PT<:Polynomial{T}} <: AbstractIntegratedMaternGP
+struct IntegratedCPEMaternGP{T<:Complex,PT<:ImmutablePolynomial{T}} <:
+       AbstractIntegratedMaternGP
     ν::T
     ρ::T
     σ2::T
@@ -195,12 +197,12 @@ function IntegratedCPEMaternGP(gp::CPEMaternGP{T}; cache_size=1000) where {T<:Co
 end
 function I0(
     gp::IntegratedCPEMaternGP{T,PT}, t::T2
-) where {T<:Complex,PT<:Polynomial{T},T2<:Real}
+) where {T<:Complex,PT<:ImmutablePolynomial{T},T2<:Real}
     return I0(gp, T(t))
 end
 function I1(
     gp::IntegratedCPEMaternGP{T,PT}, t::T2
-) where {T<:Complex,PT<:Polynomial{T},T2<:Real}
+) where {T<:Complex,PT<:ImmutablePolynomial{T},T2<:Real}
     return I1(gp, T(t))
 end
 _I0(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I0_cpe(t)
