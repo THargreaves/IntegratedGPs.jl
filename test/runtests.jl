@@ -58,8 +58,9 @@ end
     CPE = CompoundPolynomialExp
 
     functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
-    integrals_match(f::CPE) =
-        functions_match(integrate(f), x -> hquadrature(y -> f(y), 0.0, x)[1])
+    integrals_match(f::CPE) = functions_match(
+        integrate(f), x -> hquadrature(y -> f(y), 0.0, x)[1]
+    )
 
     # Test that constants integrate correctly
     const_val = 5.345
@@ -648,11 +649,10 @@ end
     general_A = [0.52 -0.32; -0.20 0.60]
     general_Q = [3.58 1.78; 1.78 4.56]
     general_H = [5.43 -0.67;]
-    any(z -> abs(z) > 1, eigen(general_A).values) && error(
-        "A matrix should not have poles outside the 
-        unit circle; found $(eigen(general_A).values) with 
-        magnitude $([abs(z) for z in eigen(general_A).values])",
-    )
+    any(z -> abs(z) > 1, eigen(general_A).values) &&
+        error("A matrix should not have poles outside the 
+              unit circle; found $(eigen(general_A).values) with 
+              magnitude $([abs(z) for z in eigen(general_A).values])")
     det(general_Q) <= 0 && error("Q must be positive definite.")
 
     general_ssm = SSM(general_A, general_Q, general_H)

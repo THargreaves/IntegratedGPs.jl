@@ -3,8 +3,17 @@ import SpecialFunctions: gamma
 import Struve: struvel
 using LRUCache
 
-export AbstractMaternGP, AbstractIntegratedMaternGP, MaternGP, IntegratedMaternGP, 
-    CPEMaternGP, IntegratedCPEMaternGP, kernel, integrate, I0, I1, Integrated
+export AbstractMaternGP,
+    AbstractIntegratedMaternGP,
+    MaternGP,
+    IntegratedMaternGP,
+    CPEMaternGP,
+    IntegratedCPEMaternGP,
+    kernel,
+    integrate,
+    I0,
+    I1,
+    Integrated
 export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
@@ -13,21 +22,20 @@ abstract type AbstractRadialGPKernel <: AbstractGPKernel end
 abstract type AbstractIntegratedGPKernel <: AbstractGPKernel end
 abstract type AbstractIntegratedRadialGPKernel <: AbstractIntegratedGPKernel end
 
-struct Integrated{T <: AbstractGPKernel} <: AbstractIntegratedGPKernel
+struct Integrated{T<:AbstractGPKernel} <: AbstractIntegratedGPKernel
     base_kernel::T
 end
 
 function kernel(gp::AbstractGPKernel, s, t)
     error("GP Kernel has not been implemented.")
 end
-function kernel(gp_mixture::Vector{T}, s, t) where T <: AbstractGPKernel
-    sum(gp -> kernel(gp, s, t),  gp_mixture)
+function kernel(gp_mixture::Vector{T}, s, t) where {T<:AbstractGPKernel}
+    sum(gp -> kernel(gp, s, t), gp_mixture)
 end
 
-function kernel(igp::Integrated{T}, s, t) where {T <: AbstractGPKernel}
+function kernel(igp::Integrated{T}, s, t) where {T<:AbstractGPKernel}
     return hcubature(x -> kernel(igp.base_kernel, x[1], x[2]), [0.0, 0.0], [s, t])
 end
-
 
 function I0(gp::AbstractIntegratedRadialGPKernel, t)
     get!(gp.I0_cache, t) do
@@ -35,7 +43,7 @@ function I0(gp::AbstractIntegratedRadialGPKernel, t)
     end
 end
 _I0(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _I0 
-                                                        function has not been implemented.") 
+                                                        function has not been implemented.")
 
 function I1(gp::AbstractIntegratedRadialGPKernel, t)
     get!(gp.I1_cache, t) do
@@ -46,14 +54,12 @@ _I1(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _
                                                         function has not been implemented.")
 I1(gp::AbstractIntegratedRadialGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
-
 function kernel(gp::AbstractIntegratedRadialGPKernel, s, t)
     Δ = abs(s - t)
     contribution(x) = x * I0(gp, x) - I1(gp, x)
 
     return contribution(s) - contribution(Δ) + contribution(t)
 end
-
 
 abstract type AbstractMaternGP <: AbstractRadialGPKernel end;
 abstract type AbstractIntegratedMaternGP <: AbstractIntegratedRadialGPKernel end;
@@ -64,15 +70,22 @@ struct MaternGP{T} <: AbstractMaternGP
     σ2::T
 end
 
-struct CPEMaternGP{T <: Union{AbstractFloat, Complex}, PT <: Polynomial{Complex{T}}} <: AbstractMaternGP
+struct CPEMaternGP{T<:Union{AbstractFloat,Complex},PT<:Polynomial{Complex{T}}} <:
+       AbstractMaternGP
     ν::Complex{T}
     ρ::Complex{T}
     σ2::Complex{T}
-    cpe::CompoundPolynomialExp{T, PT}
+    cpe::CompoundPolynomialExp{T,PT}
 
-    function CPEMaternGP(ν::Complex{T}, ρ::Complex{T}, σ2::Complex{T}, cpe::CompoundPolynomialExp{T, PT}) where {T, PT <: Polynomial{Complex{T}}} 
-        !isinteger(ν - 0.5) ? error("CPE Matern GP needs ν to be of the form p + 0.5; given $(ν)") : new{T, PT}(ν, ρ, σ2, cpe)
-    end 
+    function CPEMaternGP(
+        ν::Complex{T}, ρ::Complex{T}, σ2::Complex{T}, cpe::CompoundPolynomialExp{T,PT}
+    ) where {T,PT<:Polynomial{Complex{T}}}
+        if !isinteger(ν - 0.5)
+            error("CPE Matern GP needs ν to be of the form p + 0.5; given $(ν)")
+        else
+            new{T,PT}(ν, ρ, σ2, cpe)
+        end
+    end
 end
 
 function CPEMaternGP(ν::T, ρ::T, σ2::T) where {T}
@@ -80,11 +93,13 @@ function CPEMaternGP(ν::T, ρ::T, σ2::T) where {T}
     CPEMaternGP(complex(ν), complex(ρ), complex(σ2), cpe)
 end
 
-AbstractMaternGP(ν::T, ρ::T, σ2::T) where {T <: AbstractFloat} = isinteger(ν - 0.5) ? CPEMaternGP(ν, ρ, σ2) : MaternGP(ν, ρ, σ2)
+function AbstractMaternGP(ν::T, ρ::T, σ2::T) where {T<:AbstractFloat}
+    isinteger(ν - 0.5) ? CPEMaternGP(ν, ρ, σ2) : MaternGP(ν, ρ, σ2)
+end
 
-isapprox(a::MaternGP, b::MaternGP; rtol=1E-8) = isapprox(a.ν,  b.ν;  rtol) && 
-                                                isapprox(a.ρ,  b.ρ;  rtol) && 
-                                                isapprox(a.σ2, b.σ2; rtol)
+function isapprox(a::MaternGP, b::MaternGP; rtol=1E-8)
+    isapprox(a.ν, b.ν; rtol) && isapprox(a.ρ, b.ρ; rtol) && isapprox(a.σ2, b.σ2; rtol)
+end
 
 function kernel(gp::MaternGP, s, t)
     ν = gp.ν
@@ -117,7 +132,9 @@ struct IntegratedMaternGP{T} <: AbstractIntegratedMaternGP
     I1_cache::LRU{T,T}
 end
 
-IntegratedMaternGP(gp::MaternGP{T}; cache_size=1000) where {T} = IntegratedMaternGP(gp.ν, gp.ρ, gp.σ2; cache_size)
+function IntegratedMaternGP(gp::MaternGP{T}; cache_size=1000) where {T}
+    IntegratedMaternGP(gp.ν, gp.ρ, gp.σ2; cache_size)
+end
 function IntegratedMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
     # Compute constants
     C0 = σ2 * sqrt(π) * gamma(ν + 0.5) / gamma(ν)
@@ -153,14 +170,14 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     return gp.C1_const - gp.C1_bessel * x^(ν + 1) * besselk(ν + 1, x)
 end
 
-struct IntegratedCPEMaternGP{T, PT <: Polynomial{Complex{T}}} <: AbstractIntegratedMaternGP
+struct IntegratedCPEMaternGP{T,PT<:Polynomial{Complex{T}}} <: AbstractIntegratedMaternGP
     ν::Complex{T}
     ρ::Complex{T}
     σ2::Complex{T}
 
     # Store the CPE closed-forms for I0 and I1 
-    I0_cpe::CompoundPolynomialExp{T, PT}
-    I1_cpe::CompoundPolynomialExp{T, PT}
+    I0_cpe::CompoundPolynomialExp{T,PT}
+    I1_cpe::CompoundPolynomialExp{T,PT}
 
     # LRU caches for evaluations of I0 and I1
     I0_cache::LRU{T,T}
@@ -182,12 +199,11 @@ _I1(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I1_cpe(t)
 AbstractIntegratedMaternGP(gp::MaternGP) = IntegratedMaternGP(gp)
 AbstractIntegratedMaternGP(gp::CPEMaternGP) = IntegratedCPEMaternGP(gp)
 
-
-integrate(gp_mixture::Vector{T}) where {T <: AbstractGPKernel} = [integrate(gp) for gp in gp_mixture]
-integrate(gp::T) where {T <: AbstractGPKernel} = Integrated{T}(gp)
+function integrate(gp_mixture::Vector{T}) where {T<:AbstractGPKernel}
+    [integrate(gp) for gp in gp_mixture]
+end
+integrate(gp::T) where {T<:AbstractGPKernel} = Integrated{T}(gp)
 integrate(gp::AbstractMaternGP) = AbstractIntegratedMaternGP(gp)
-
-
 
 function windowed_cholesky_update!(F::Cholesky, ks::AbstractVector)
     """

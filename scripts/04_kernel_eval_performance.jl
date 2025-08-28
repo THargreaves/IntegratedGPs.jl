@@ -14,14 +14,14 @@ println("\n\nRUNNING TEST\n")
 
 SIGDIGITS = 4
 
-pure_poly(x) = 1 + 2 * x + 3 * x * x 
+pure_poly(x) = 1 + 2 * x + 3 * x * x
 poly_poly = Polynomial([1, 2, 3])
 pe_poly = PolynomialExp([1, 2, 3], 0)
 cpe_poly = CompoundPolynomialExp(0 => [1, 2, 3])
 
 evals_cpe = evals_per_second(() -> cpe_poly(1.0))
 evals_poly = evals_per_second(() -> poly_poly(1.0))
-evals_pe  = evals_per_second(() -> pe_poly(1.0))
+evals_pe = evals_per_second(() -> pe_poly(1.0))
 evals_pure = evals_per_second(() -> pure_poly(1.0))
 
 # TODO: CPE Evaluation seems to be way too slow across the board.
@@ -33,7 +33,7 @@ println("Poly: $(round(evals_poly, sigdigits=SIGDIGITS))/s")
 println("Pure: $(round(evals_pure, sigdigits=SIGDIGITS))/s")
 println("")
 
-pexp_foo(x) = (1.0 + 2 * x + 3 * x * x) * exp(-x) 
+pexp_foo(x) = (1.0 + 2 * x + 3 * x * x) * exp(-x)
 cpe_poly = PolynomialExp([1, 2, 3], 1)
 
 evals_cpe = evals_per_second(() -> cpe_poly(1.0))
@@ -43,8 +43,6 @@ println("PolyExp")
 println("PolyExp:  $(round(evals_cpe, sigdigits=SIGDIGITS))/s")
 println("Foo:      $(round(evals_foo, sigdigits=SIGDIGITS))/s")
 println("")
-
-
 
 ν = 3.5
 ρ = 2.4
@@ -60,12 +58,11 @@ println("General:   $(round(evals_gen, sigdigits=SIGDIGITS))/s")
 println("CPE:       $(round(evals_cpe, sigdigits=SIGDIGITS))/s")
 println("")
 
-
 naive_igp_gen = Integrated(gp_gen)
 naive_igp_cpe = Integrated(gp_cpe)
-igp_gen = IntegratedMaternGP(gp_gen, cache_size=0)
-igp_cpe = IntegratedCPEMaternGP(gp_cpe, cache_size=0)
-igp_cache = IntegratedCPEMaternGP(gp_cpe, cache_size=1000)
+igp_gen = IntegratedMaternGP(gp_gen; cache_size=0)
+igp_cpe = IntegratedCPEMaternGP(gp_cpe; cache_size=0)
+igp_cache = IntegratedCPEMaternGP(gp_cpe; cache_size=1000)
 
 evals_naive_gen = evals_per_second(() -> kernel(naive_igp_gen, 1.0, 2.0))
 evals_naive_cpe = evals_per_second(() -> kernel(naive_igp_cpe, 1.0, 2.0))

@@ -4,34 +4,82 @@ export PolynomialExp, CompoundPolynomialExp, SSM
 export +, show, isequal, isapprox, zero
 export integrate, materntocpe, cpetomaternmixture, ssm2GPKernel, fast_exp
 
-const fast_exp_poly = ImmutablePolynomial{ComplexF64}((1.0, 1.0, 0.5, 0.16666666666666666, 0.041666666666666664, 0.008333333333333333, 0.001388888888888889, 0.0001984126984126984, 2.48015873015873e-5, 2.7557319223985893e-6, 2.755731922398589e-7, 2.505210838544172e-8, 2.08767569878681e-9, 1.6059043836821613e-10, 1.1470745597729725e-11, 7.647163731819816e-13, 4.779477332387385e-14, 2.8114572543455206e-15, 1.5619206968586225e-16, 8.22063524662433e-18, 4.110317623312165e-19))
+const fast_exp_poly = ImmutablePolynomial{ComplexF64}((
+    1.0,
+    1.0,
+    0.5,
+    0.16666666666666666,
+    0.041666666666666664,
+    0.008333333333333333,
+    0.001388888888888889,
+    0.0001984126984126984,
+    2.48015873015873e-5,
+    2.7557319223985893e-6,
+    2.755731922398589e-7,
+    2.505210838544172e-8,
+    2.08767569878681e-9,
+    1.6059043836821613e-10,
+    1.1470745597729725e-11,
+    7.647163731819816e-13,
+    4.779477332387385e-14,
+    2.8114572543455206e-15,
+    1.5619206968586225e-16,
+    8.22063524662433e-18,
+    4.110317623312165e-19,
+))
 
-fast_exp(x::T) where T <: Integer = fast_exp(float(x))
-fast_exp(x::T) where T <: AbstractFloat = fast_exp(complex(x))
+fast_exp(x::T) where {T<:Integer} = fast_exp(float(x))
+fast_exp(x::T) where {T<:AbstractFloat} = fast_exp(complex(x))
 fast_exp(x::ComplexF64) = fast_exp_poly(x)
-fast_exp(x::Complex{T}) where T <: AbstractFloat = error("Not implemented")
+fast_exp(x::Complex{T}) where {T<:AbstractFloat} = error("Not implemented")
 
-PolynomialExp(arr::Vector{Complex{T}}, beta::Complex{T}) where T <: AbstractFloat = PolynomialExp(Polynomial{Complex{T}}(arr), beta)
-PolynomialExp(arr::Vector{Complex{T1}}, beta::Complex{T2}) where {T1 <: AbstractFloat, T2 <: Integer} = PolynomialExp(arr, float(beta))
-PolynomialExp(arr::Vector{Complex{T1}}, beta::Complex{T2}) where {T1 <: Integer, T2 <: Any} = PolynomialExp(float.(arr), beta)
-PolynomialExp(arr::Vector{T1}, beta::Complex{T2}) where {T1 <: Real, T2 <: Real} = PolynomialExp(complex.(float.(arr)), beta)
-PolynomialExp(arr::Vector{T1}, beta::T2) where {T1 <: Real, T2 <: Real} = PolynomialExp(arr, complex(float(beta)))
-PolynomialExp(c::T) where {T <: Number} = PolynomialExp([c], zero(T))
+function PolynomialExp(arr::Vector{Complex{T}}, beta::Complex{T}) where {T<:AbstractFloat}
+    PolynomialExp(Polynomial{Complex{T}}(arr), beta)
+end
+function PolynomialExp(
+    arr::Vector{Complex{T1}}, beta::Complex{T2}
+) where {T1<:AbstractFloat,T2<:Integer}
+    PolynomialExp(arr, float(beta))
+end
+function PolynomialExp(
+    arr::Vector{Complex{T1}}, beta::Complex{T2}
+) where {T1<:Integer,T2<:Any}
+    PolynomialExp(float.(arr), beta)
+end
+function PolynomialExp(arr::Vector{T1}, beta::Complex{T2}) where {T1<:Real,T2<:Real}
+    PolynomialExp(complex.(float.(arr)), beta)
+end
+function PolynomialExp(arr::Vector{T1}, beta::T2) where {T1<:Real,T2<:Real}
+    PolynomialExp(arr, complex(float(beta)))
+end
+PolynomialExp(c::T) where {T<:Number} = PolynomialExp([c], zero(T))
 
-function fast_poly(poly::PT, x::Complex{T}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
+function fast_poly(
+    poly::PT, x::Complex{T}
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
     res::Complex{T} = 0
     for n in Polynomials.degree(poly):-1:0
-        res *= x 
+        res *= x
         res += poly[n]
     end
     return res
 end
 
 #(pe::PolynomialExp)(x) = pe.polynomial(x) * exp(-pe.beta * x);
-(pe::PolynomialExp{T, PT})(x::T2) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}, T2 <: Real} = pe(complex(x));
-(pe::PolynomialExp{T, PT})(x::T2) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}, T2 <: Complex{Integer}} = pe(float(x));
+function (pe::PolynomialExp{T,PT})(
+    x::T2
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}},T2<:Real}
+    pe(complex(x))
+end;
+function (pe::PolynomialExp{T,PT})(
+    x::T2
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}},T2<:Complex{Integer}}
+    pe(float(x))
+end;
 
-function (pe::PolynomialExp{T, PT})(x::Complex{T}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} 
+function (pe::PolynomialExp{T,PT})(
+    x::Complex{T}
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
     return pe.polynomial(x) * exp(-pe.beta * x) #fast_poly(pe.polynomial, x) * exp(-pe.beta * x);
 end
 
@@ -39,15 +87,23 @@ Base.oneunit(::Type{PolynomialExp{T}}) where {T} = PolynomialExp(oneunit(Complex
 Base.zero(::Type{PolynomialExp{T}}) where {T} = PolynomialExp(zero(Complex{T}))
 Base.:*(c::Number, pe::PolynomialExp) = PolynomialExp(c * pe.polynomial, pe.beta);
 function Base.:*(c::Number, cpe::CompoundPolynomialExp)
-    return CompoundPolynomialExp([beta => c * poly for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)])
+    return CompoundPolynomialExp([
+        beta => c * poly for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
+    ])
 end;
 Base.:/(pe::PolynomialExp, c::Number) = PolynomialExp(pe.polynomial / c, pe.beta);
 degree(pe::PolynomialExp) = Polynomials.degree(pe.polynomial)
 
 #(cpe::CompoundPolynomialExp)(x) = sum([PolynomialExp(poly, beta)(x) for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)])
 
-(cpe::CompoundPolynomialExp{T, PT})(x::T) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} = cpe(complex(x))
-function (cpe::CompoundPolynomialExp{T, PT})(x::Complex{T}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
+function (cpe::CompoundPolynomialExp{T,PT})(
+    x::T
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
+    cpe(complex(x))
+end
+function (cpe::CompoundPolynomialExp{T,PT})(
+    x::Complex{T}
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
     s::Complex{T} = 0
     for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
         s += PolynomialExp(poly, beta)(x) #fast_poly(poly, x) * exp(-beta * x)
@@ -55,31 +111,69 @@ function (cpe::CompoundPolynomialExp{T, PT})(x::Complex{T}) where {T <: Abstract
     return s
 end
 
-function CompoundPolynomialExp(dict::Dict{Complex{T}, PT}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
+function CompoundPolynomialExp(
+    dict::Dict{Complex{T},PT}
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
     N = length(dict)
     key_lookup = Vector{Complex{T}}(undef, N)
     value_lookup = Vector{PT}(undef, N)
 
     for (i, (k, v)) in enumerate(dict)
-        key_lookup[i] = k 
+        key_lookup[i] = k
         value_lookup[i] = v
     end
 
     CompoundPolynomialExp(dict, key_lookup, value_lookup)
 end
-CompoundPolynomialExp(itr::Vector{Pair{Complex{T}, PT}}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} = CompoundPolynomialExp(Dict(itr))
-CompoundPolynomialExp(itr::Vector{Pair{T, PT}}) where {T <: AbstractFloat, T2, PT <: Polynomial{T2}} = CompoundPolynomialExp(Dict([complex(float(k)) => Polynomial{complex(float(T2))}(v) for (k, v) in itr]))
-CompoundPolynomialExp(itr::Vector{Pair{Complex{T}, PT}}) where {T <: AbstractFloat, PT <: Vector{Complex{T}}} = CompoundPolynomialExp(Dict([(k, Polynomial(v)) for (k, v) in itr]))
-CompoundPolynomialExp(itr::Vector{Pair{T, PT}}) where {T, T2, PT <: Vector{T2}} = CompoundPolynomialExp(Dict([(complex(float(k)), Polynomial(complex.(float.(v)))) for (k, v) in itr]))
+function CompoundPolynomialExp(
+    itr::Vector{Pair{Complex{T},PT}}
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
+    CompoundPolynomialExp(Dict(itr))
+end
+function CompoundPolynomialExp(
+    itr::Vector{Pair{T,PT}}
+) where {T<:AbstractFloat,T2,PT<:Polynomial{T2}}
+    CompoundPolynomialExp(
+        Dict([complex(float(k)) => Polynomial{complex(float(T2))}(v) for (k, v) in itr])
+    )
+end
+function CompoundPolynomialExp(
+    itr::Vector{Pair{Complex{T},PT}}
+) where {T<:AbstractFloat,PT<:Vector{Complex{T}}}
+    CompoundPolynomialExp(Dict([(k, Polynomial(v)) for (k, v) in itr]))
+end
+function CompoundPolynomialExp(itr::Vector{Pair{T,PT}}) where {T,T2,PT<:Vector{T2}}
+    CompoundPolynomialExp(
+        Dict([(complex(float(k)), Polynomial(complex.(float.(v)))) for (k, v) in itr])
+    )
+end
 
-CompoundPolynomialExp(p::Pair{T, PT}) where {T, T2, PT <: Vector{T2}} = CompoundPolynomialExp([p])
-CompoundPolynomialExp(p::Pair{T, PT}) where {T, T2, PT <: Polynomial{T2}} = CompoundPolynomialExp([p])
-CompoundPolynomialExp(pe::PolynomialExp{T, PT}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} = CompoundPolynomialExp(pe.beta => pe.polynomial)
+function CompoundPolynomialExp(p::Pair{T,PT}) where {T,T2,PT<:Vector{T2}}
+    CompoundPolynomialExp([p])
+end
+function CompoundPolynomialExp(p::Pair{T,PT}) where {T,T2,PT<:Polynomial{T2}}
+    CompoundPolynomialExp([p])
+end
+function CompoundPolynomialExp(
+    pe::PolynomialExp{T,PT}
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
+    CompoundPolynomialExp(pe.beta => pe.polynomial)
+end
 
-CompoundPolynomialExp(c::T) where T <: Number = CompoundPolynomialExp(zero(complex(float(T))) => Polynomial{complex(float(T))}([c]))
+function CompoundPolynomialExp(c::T) where {T<:Number}
+    CompoundPolynomialExp(zero(complex(float(T))) => Polynomial{complex(float(T))}([c]))
+end
 
-Base.oneunit(::Type{CompoundPolynomialExp{T, PT}}) where {T <: AbstractFloat, PT <:Polynomial{Complex{T}}} = CompoundPolynomialExp(oneunit(T))
-Base.zero(::Type{CompoundPolynomialExp{T, PT}}) where {T <: AbstractFloat, PT <:Polynomial{Complex{T}}} = CompoundPolynomialExp{T, PT}(Dict())
+function Base.oneunit(
+    ::Type{CompoundPolynomialExp{T,PT}}
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
+    CompoundPolynomialExp(oneunit(T))
+end
+function Base.zero(
+    ::Type{CompoundPolynomialExp{T,PT}}
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
+    CompoundPolynomialExp{T,PT}(Dict())
+end
 
 function Base.isequal(a::CompoundPolynomialExp, b::CompoundPolynomialExp)
     return issetequal(keys(a.polynomials), keys(b.polynomials)) && all([
@@ -103,18 +197,42 @@ function Base.:+(a::CompoundPolynomialExp, b::CompoundPolynomialExp)
         ),
     )
 end
-Base.:+(cpe::CompoundPolynomialExp{T, PT}, pe::PolynomialExp{T, PT}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} = cpe + CompoundPolynomialExp(pe)
-function Base.:*(cpe::CompoundPolynomialExp{T, PT}, p::PT) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
-    return CompoundPolynomialExp([(beta => poly * p) for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)])
+function Base.:+(
+    cpe::CompoundPolynomialExp{T,PT}, pe::PolynomialExp{T,PT}
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
+    cpe + CompoundPolynomialExp(pe)
 end
-Base.:*(cpe::CompoundPolynomialExp{T, PT}, p::PT2) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}, T2 <: Integer, PT2 <: Polynomial{Complex{T2}}} = cpe * Polynomial{float(T2)}(p)
-Base.:*(cpe::CompoundPolynomialExp{T, PT}, p::PT2) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}, T2 <: Real, PT2 <: Polynomial{T2}} = cpe * Polynomial{complex(T2)}(p)
+function Base.:*(
+    cpe::CompoundPolynomialExp{T,PT}, p::PT
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
+    return CompoundPolynomialExp([
+        (beta => poly * p) for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
+    ])
+end
+function Base.:*(
+    cpe::CompoundPolynomialExp{T,PT}, p::PT2
+) where {
+    T<:AbstractFloat,PT<:Polynomial{Complex{T}},T2<:Integer,PT2<:Polynomial{Complex{T2}}
+}
+    cpe * Polynomial{float(T2)}(p)
+end
+function Base.:*(
+    cpe::CompoundPolynomialExp{T,PT}, p::PT2
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}},T2<:Real,PT2<:Polynomial{T2}}
+    cpe * Polynomial{complex(T2)}(p)
+end
 
 function Base.show(io::IO, pe::PolynomialExp)
     return print(io, "($(string(pe.polynomial)))exp(-($(pe.beta))x)")
 end
 function Base.show(io::IO, cpe::CompoundPolynomialExp)
-    res = join([PolynomialExp(poly, beta) for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)], " + ")
+    res = join(
+        [
+            PolynomialExp(poly, beta) for
+            (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
+        ],
+        " + ",
+    )
     return print(io, res)
 end
 function Base.convert(::Type{CompoundPolynomialExp}, x::Float64)
@@ -147,12 +265,14 @@ function integrate(pe::PolynomialExp)
 end
 
 function integrate(cpe::CompoundPolynomialExp)
-    return sum([integrate(PolynomialExp(poly, beta)) for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)])
+    return sum([
+        integrate(PolynomialExp(poly, beta)) for
+        (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
+    ])
 end # Integrate the CompoundPolynomialExp term by term
 
 I0_form(cpe::CompoundPolynomialExp) = integrate(cpe)
 I1_form(cpe::CompoundPolynomialExp) = integrate(cpe * Polynomial([0, 1]))
-
 
 materntocpe(gp::MaternGP) = materntocpe(gp.ν, gp.ρ, gp.σ2)
 materntocpe(gp::CPEMaternGP) = gp.cpe
@@ -175,8 +295,12 @@ end
 
 # Determine a Matern Mixture with the same closed-form as a given CPE using a simple form 
 # of Gaussian elimination in the space of PolynomialExps
-function cpetomaternmixture(cpe::CompoundPolynomialExp{T, PT}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
-    poly_degs = [Polynomials.degree(poly) for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)]
+function cpetomaternmixture(
+    cpe::CompoundPolynomialExp{T,PT}
+) where {T<:AbstractFloat,PT<:Polynomial{Complex{T}}}
+    poly_degs = [
+        Polynomials.degree(poly) for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
+    ]
     num_terms = sum(poly_degs .+ 1)
     matern_mixture = Vector{CPEMaternGP}(undef, num_terms)
     next_mixture_ind = 1
@@ -264,7 +388,7 @@ function fit_cov(ssm::SSM)
     v = zeros((N, 1))
 
     # Solve the Discrete Algebraic Lyapunov Equation to get the stationary process variance
-    process_σ2 = only(ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H') 
+    process_σ2 = only(ssm.H * lyapd(ssm.A, ssm.Q) * ssm.H')
     ssm_cov = process_σ2 * ssm.A
 
     for t in 1:N
