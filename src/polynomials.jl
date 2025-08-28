@@ -204,8 +204,9 @@ factorial_ratio(n, k) = factorial(n) / factorial(k)
 # Evaluate the integral of x^n exp(-beta x) for beta != 0
 function integrated_monomial(n, beta)
     return CompoundPolynomialExp([
-        0 => [beta^(-n - 1)],
-        beta => [factorial_ratio(n, n_min_i) / beta^(n - n_min_i + 1) for n_min_i in 0:n],
+        0 => [factorial(n) * beta^(-n - 1)],
+        beta =>
+            [-factorial_ratio(n, n_min_i) / (beta)^(n - n_min_i + 1) for n_min_i in 0:n],
     ])
 end
 
