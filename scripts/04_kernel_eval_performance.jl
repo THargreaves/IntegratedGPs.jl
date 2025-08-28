@@ -2,7 +2,7 @@ using IntegratedMaternGPs
 using Polynomials
 
 function evals_per_second(f, timeout::Float64=1.0)
-    cnt::Int32 = 0
+    cnt::Int = 0
     start_time = time()
     while (time() - start_time) < timeout
         f()
@@ -16,16 +16,19 @@ SIGDIGITS = 4
 
 pure_poly(x) = 1 + 2 * x + 3 * x * x 
 poly_poly = Polynomial([1, 2, 3])
+pe_poly = PolynomialExp([1, 2, 3], 0)
 cpe_poly = CompoundPolynomialExp(0 => [1, 2, 3])
 
 evals_cpe = evals_per_second(() -> cpe_poly(1.0))
 evals_poly = evals_per_second(() -> poly_poly(1.0))
+evals_pe  = evals_per_second(() -> pe_poly(1.0))
 evals_pure = evals_per_second(() -> pure_poly(1.0))
 
 # TODO: CPE Evaluation seems to be way too slow across the board.
 
 println("Polynomials")
 println("CPE:  $(round(evals_cpe, sigdigits=SIGDIGITS))/s")
+println("PE:   $(round(evals_pe, sigdigits=SIGDIGITS))/s")
 println("Poly: $(round(evals_poly, sigdigits=SIGDIGITS))/s")
 println("Pure: $(round(evals_pure, sigdigits=SIGDIGITS))/s")
 println("")
