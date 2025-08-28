@@ -48,10 +48,13 @@ end
 Base.oneunit(::Type{PolynomialExp{T}}) where {T<:Complex} = PolynomialExp(oneunit(T))
 Base.zero(::Type{PolynomialExp{T}}) where {T<:Complex} = PolynomialExp(zero(T))
 Base.:*(c::Number, pe::PolynomialExp) = PolynomialExp(c * pe.polynomial, pe.beta);
-function Base.:*(c::Number, cpe::CompoundPolynomialExp)
-    return CompoundPolynomialExp([
-        beta => c * poly for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
-    ])
+function Base.:*(
+    c::T2, cpe::CompoundPolynomialExp{T,PT}
+) where {T<:Complex,PT<:ImmutablePolynomial{T},T2<:Number}
+    new_pairs::Vector{Pair{T,PT}} = [
+        (beta => c * poly) for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
+    ]
+    return CompoundPolynomialExp(new_pairs)
 end;
 Base.:/(pe::PolynomialExp, c::Number) = PolynomialExp(pe.polynomial / c, pe.beta);
 degree(pe::PolynomialExp) = Polynomials.degree(pe.polynomial)
