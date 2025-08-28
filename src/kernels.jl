@@ -193,8 +193,16 @@ function IntegratedCPEMaternGP(gp::CPEMaternGP{T}; cache_size=1000) where {T<:Co
     I1_cache = LRU{T,T}(; maxsize=cache_size)
     return IntegratedCPEMaternGP(gp.ν, gp.ρ, gp.σ2, I0_cpe, I1_cpe, I0_cache, I1_cache)
 end
-I0(gp::IntegratedCPEMaternGP, t::T) where {T<:Real} = I0(gp, complex(t))
-I1(gp::IntegratedCPEMaternGP, t::T) where {T<:Real} = I1(gp, complex(t))
+function I0(
+    gp::IntegratedCPEMaternGP{T,PT}, t::T2
+) where {T<:Complex,PT<:Polynomial{T},T2<:Real}
+    return I0(gp, T(t))
+end
+function I1(
+    gp::IntegratedCPEMaternGP{T,PT}, t::T2
+) where {T<:Complex,PT<:Polynomial{T},T2<:Real}
+    return I1(gp, T(t))
+end
 _I0(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I0_cpe(t)
 _I1(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I1_cpe(t)
 
