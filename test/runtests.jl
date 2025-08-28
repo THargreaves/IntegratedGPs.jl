@@ -4,6 +4,129 @@ using TestItemRunner
 
 @run_package_tests
 
+@testitem "Basic CPE operations" begin
+    using IntegratedMaternGPs
+    using Polynomials
+
+    import Base: isapprox
+
+    PE = PolynomialExp
+    CPE = CompoundPolynomialExp
+
+    # Test that adding PolynomialExp terms gives the expected CompoundPolynomialExp
+    a = PE([1, 2, 3], 1 + 3im) + PE([4, 5, 6], -2 - 5im)
+    expected_a = CPE([1 + 3im => [1, 2, 3], -2 - 5im => [4, 5, 6]])
+
+    b = PE([-2.5, 0, 0.5, 0.9], 4 + 7im) + PE([2.1, 0.9, 4.3], -2 - 5im)
+    expected_b = CPE([4 + 7im => [-2.5, 0, 0.5, 0.9], -2 - 5im => [2.1, 0.9, 4.3]])
+
+    @test isequal(a, expected_a) && isequal(b, expected_b)
+
+    # Test that adding CompoundPolynomialExp terms gives the expected CompoundPolynomialExp
+    c = a + b
+    expected_c = CPE([
+        1 + 3im => [1, 2, 3], -2 - 5im => [6.1, 5.9, 10.3], 4 + 7im => [-2.5, 0, 0.5, 0.9]
+    ])
+    @test isequal(c, expected_c)
+
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x)), 0:1E-1:5)
+
+    # Test that floats are correctly converted to CPEs and evaluating a constant 
+    # expression gives the expected result
+    const_val = 4.0
+    const_cpe = CPE(const_val)
+    @test functions_match(const_cpe, (x) -> const_val)
+
+    # Test that CPEs which are exactly polynomials are evaluated correctly
+    poly_cpe = CPE(0 => [1, 5, -7])
+    equiv_poly(x) = 1 + 5 * x - 7 * x^2
+    @test functions_match(poly_cpe, equiv_poly)
+
+    # Test that a general CPE matches the explicit function it corresponds to 
+    generic_cpe = CPE([0 => [2, 3, 0, -5], 1.5 => [2.1, 3.2], 4.8 => [0, 0, 5]])
+    equiv_foo(x) =
+        (2 + 3 * x - 5 * x^3) + (2.1 + 3.2 * x) * exp(-1.5 * x) + 5 * x^2 * exp(-4.8 * x)
+    @test functions_match(generic_cpe, equiv_foo)
+end
+
+@testitem "CPE Integration" begin
+    using IntegratedMaternGPs
+    using HCubature
+
+    import Base: isapprox
+
+    CPE = CompoundPolynomialExp
+
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
+    integrals_match(f::CPE) =
+        functions_match(integrate(f), x -> hquadrature(y -> f(y), 0.0, x)[1])
+
+    # Test that constants integrate correctly
+    const_val = 5.345
+    const_cpe = CPE(const_val)
+    @test integrals_match(const_cpe)
+
+    # Test that polynomials integrate correctly
+    poly_cpe = CPE(0 => [2.3, -5.425, 8.234, 0.987])
+    @test integrals_match(poly_cpe)
+
+    # Test that some more general CPE integral evaluates to the right thing
+    generic_cpe = CPE([1.567 => [5.023, -1.23], 4.254 => [0, 0.93, 0, 10.92]])
+    @test integrals_match(poly_cpe)
+end
+
+@testitem "Matern kernel case distinction" begin
+    using IntegratedMaternGPs
+
+    import Base: isapprox
+
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
+
+    # Test if the Matern GPs are separated into cases when ν = p + 0.5
+    ν1 = 1.6
+    ν2 = 1.5
+    ρ = 0.8
+    σ2 = 5.4
+    gp1 = AbstractMaternGP(ν1, ρ, σ2)
+    gp2 = AbstractMaternGP(ν2, ρ, σ2)
+
+    @test typeof(gp1) <: AbstractMaternGP && isa(gp1, MaternGP)
+    @test typeof(gp2) <: AbstractMaternGP && isa(gp2, CPEMaternGP)
+
+    # Test if the two Matern GP cases have the same kernel
+    ν = 3.5
+    ρ = 1.2
+    σ2 = 4.6
+    gp_cpe = CPEMaternGP(ν, ρ, σ2)
+    gp_gen = MaternGP(ν, ρ, σ2)
+
+    @test functions_match((t) -> kernel(gp_cpe, 0.0, t), (t) -> kernel(gp_gen, 0.0, t))
+end
+
+@testitem "Matern kernel I0 & I1 verification" begin
+    using IntegratedMaternGPs
+    using HCubature
+
+    import Base: isapprox
+
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
+
+    # Test that the I0 and I1 functions provide the same answers as numerical methods
+    ν = 4.3
+    ρ = 2.1
+    σ2 = 5.3
+
+    gp = AbstractMaternGP(ν, ρ, σ2)
+    igp = integrate(gp)
+
+    @test functions_match(
+        t -> I0(igp, t), t -> hquadrature(s -> kernel(gp, 0, s), 0.0, t)[1]
+    )
+    @test functions_match(
+        t -> I1(igp, t), t -> hquadrature(s -> s * kernel(gp, 0, s), 0.0, t)[1]
+    )
+end
+
 @testitem "Integrated Matern Kernel" begin
     using IntegratedMaternGPs
     using HCubature
@@ -12,19 +135,19 @@ using TestItemRunner
     ρ = 2.0
     σ2 = 1.0
     gp = MaternGP(ν, ρ, σ2)
-    int_gp = IntegratedMaternGP(ν, ρ, σ2)
+    int_gp = integrate(gp)
 
     # Test s ≠ t case
     s, t = 0.8, 1.1
-    kernel_numerical = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
+    kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
     kernel_analytical = kernel(int_gp, s, t)
-    @test kernel_numerical ≈ kernel_analytical rtol = 1e-8
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
 
     # Test s = t case
     s = t = 0.8
-    kernel_numerical = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
+    kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
     kernel_analytical = kernel(int_gp, s, t)
-    @test kernel_numerical ≈ kernel_analytical rtol = 1e-8
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
 end
 
 @testitem "LRU Cache" begin
@@ -34,7 +157,7 @@ end
     ν = 1.5
     ρ = 2.0
     σ2 = 1.0
-    gp = IntegratedMaternGP(ν, ρ, σ2)
+    gp = integrate(MaternGP(ν, ρ, σ2))
 
     s, t = 0.8, 1.1
     kernel(gp, s, t)
@@ -433,63 +556,113 @@ end
     @test S_sparse ≈ C_dense
 end
 
-@testitem "Basic CPE operations" begin
+@testitem "Matern to CPE" begin
     using IntegratedMaternGPs
-    using Polynomials
 
-    PE = PolynomialExp
+    import Base: isapprox
+
     CPE = CompoundPolynomialExp
 
-    a = PE([1, 2, 3], 1 + 3im) + PE([4, 5, 6], -2 - 5im)
-    expected_a = CPE([1 + 3im => [1, 2, 3], -2 - 5im => [4, 5, 6]])
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
 
-    b = PE([-2.5, 0, 0.5, 0.9], 4 + 7im) + PE([2.1, 0.9, 4.3], -2 - 5im)
-    expected_b = CPE([4 + 7im => [-2.5, 0, 0.5, 0.9], -2 - 5im => [2.1, 0.9, 4.3]])
+    # The case ν = 0.5 is known exactly, test that it corresponds to the expected expression
+    gp_p0 = MaternGP(0.5, 1.0, 1.0)
+    target_p0 = CPE(1 => [1])
+    @test isequal(materntocpe(gp_p0), target_p0)
 
-    # Test that adding PolynomialExp terms gives the expected CompoundPolynomialExp
-    @test isequal(a, expected_a) && isequal(b, expected_b)
+    # The case ν = 1.5 is known exactly, test that it corresponds to the expected expression
+    gp_p1 = MaternGP(1.5, 1.0, 1.0)
+    target_p1 = CPE(sqrt(3) => [1, sqrt(3)])
+    @test isequal(materntocpe(gp_p1), target_p1)
 
-    c = a + b
-    expected_c = CPE([
-        1 + 3im => [1, 2, 3], -2 - 5im => [6.1, 5.9, 10.3], 4 + 7im => [-2.5, 0, 0.5, 0.9]
-    ])
-    # Test that adding CompoundPolynomialExp terms gives the expected CompoundPolynomialExp
-    @test isequal(c, expected_c)
+    # The case ν = 2.5 is known exactly, test that it corresponds to the expected expression
+    gp_p2 = MaternGP(2.5, 1.0, 1.0)
+    target_p2 = CPE(sqrt(5) => [1, sqrt(5), 5 / 3])
+    @test isequal(materntocpe(gp_p2), target_p2)
 
-    functions_match(f, g) = all(isapprox(f(x), g(x)) for x in 0:1E-2:5)
+    # Test that some more general Matern GP has the same covariance as its corresponding CPE
+    ν = 5.5
+    ρ = 3.2
+    σ2 = 4.5
+    gp = MaternGP(ν, ρ, σ2)
 
-    const_val = 4.0
-    const_cpe = CPE(const_val)
-    # Test that floats are correctly converted to CPEs and evaluating a constant expression gives the expected result
-    @test functions_match(const_cpe, (x) -> const_val)
-
-    poly_cpe = CPE([0 => [1, 5, -7]])
-    equiv_poly(x) = 1 + 5 * x - 7 * x^2
-    @test functions_match(poly_cpe, equiv_poly)
-
-    generic_cpe = CPE([0 => [2, 3, 0, -5], 1.5 => [2.1, 3.2], 4.8 => [0, 0, 5]])
-    equiv_foo(x) =
-        (2 + 3 * x - 5 * x^3) + (2.1 + 3.2 * x) * exp(-1.5 * x) + 5 * x^2 * exp(-4.8 * x)
-    @test functions_match(generic_cpe, equiv_foo)
+    cpe = materntocpe(gp)
+    @test functions_match(cpe, t -> kernel(gp, 0, t))
 end
 
-@testitem "CPE Integration" begin
+@testitem "CPE to Matern Mixture" begin
     using IntegratedMaternGPs
-    using HCubature
+
+    import Base: isapprox
 
     CPE = CompoundPolynomialExp
 
-    functions_match(f, g) = all(isapprox(f(x), g(x); rtol=1E-8) for x in 0:1E-2:5)
-    integrals_match(f::CPE) =
-        functions_match(integrate(f), (x) -> hquadrature((y) -> f(y), 0.0, x)[1])
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
 
-    const_val = 5.345
-    const_cpe = CPE([0 => [const_val]])
-    @test integrals_match(const_cpe)
+    # Take the known cases of Matern -> CPE and check that the inverse still matches
+    cpe_p0 = CPE(1 => [1])
+    target_p0 = [MaternGP(0.5, 1.0, 1.0)]
+    candidate_p0 = cpetomaternmixture(cpe_p0)
+    @test functions_match(t -> kernel(candidate_p0, 0.0, t), t -> kernel(target_p0, 0.0, t))
 
-    poly_cpe = CPE([0 => [2.3, -5.425, 8.234, 0.987]])
-    @test integrals_match(poly_cpe)
+    cpe_p1 = CPE(sqrt(3) => [1, sqrt(3)])
+    target_p1 = [MaternGP(1.5, 1.0, 1.0)]
+    candidate_p1 = cpetomaternmixture(cpe_p1)
+    @test functions_match(t -> kernel(candidate_p1, 0.0, t), t -> kernel(target_p1, 0.0, t))
 
-    generic_cpe = CPE([1.567 => [5.023, -1.23], 4.254 => [0, 0.93, 0, 10.92]])
-    @test integrals_match(poly_cpe)
+    cpe_p2 = CPE(sqrt(5) => [1, sqrt(5), 5 / 3])
+    target_p2 = [MaternGP(2.5, 1.0, 1.0)]
+    candidate_p2 = cpetomaternmixture(cpe_p2)
+    @test functions_match(t -> kernel(candidate_p2, 0.0, t), t -> kernel(target_p2, 0.0, t))
+
+    # Test that some more general CPE has the same form as its Matern Mixture
+    cpe_general = CPE([
+        0.1 => [9.3, 1.23], 1.542 => [8.432, 0.32, 7.543], 6.222 => [0.0, 1.11, 0.234]
+    ])
+    candidate_general = cpetomaternmixture(cpe_general)
+    @test functions_match(cpe_general, t -> kernel(candidate_general, 0.0, t))
+end
+
+@testitem "SSM to Matern Mixture" begin
+    using IntegratedMaternGPs
+
+    import Base: isapprox
+    using LinearAlgebra, MatrixEquations
+
+    CPE = CompoundPolynomialExp
+
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
+    functions_match_at_int(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1:10)
+
+    # The AR(1) process has a known closed form covariance. 
+    # Test that it matches the equivalent Matern Mixture.
+    a = 0.9
+    σ2 = 1.0
+    ar_1 = SSM([a;;], [σ2;;], [1.0;;])
+    candidate_kernel = ssm2GPKernel(ar_1)
+    target_cov = CPE(-log(a) => [σ2 / (1 - a^2)])
+
+    @test functions_match(t -> kernel(candidate_kernel, 0.0, t), target_cov)
+
+    # Check if some other SSM has the same covariance as its corresponding kernel
+    general_A = [0.52 -0.32; -0.20 0.60]
+    general_Q = [3.58 1.78; 1.78 4.56]
+    general_H = [5.43 -0.67;]
+    any(z -> abs(z) > 1, eigen(general_A).values) && error(
+        "A matrix should not have poles outside the 
+        unit circle; found $(eigen(general_A).values) with 
+        magnitude $([abs(z) for z in eigen(general_A).values])",
+    )
+    det(general_Q) <= 0 && error("Q must be positive definite.")
+
+    general_ssm = SSM(general_A, general_Q, general_H)
+    general_kernel = ssm2GPKernel(general_ssm)
+    radial_σ2 = only(general_H * lyapd(general_A, general_Q) * general_H')
+
+    @test functions_match_at_int(
+        t -> real(kernel(general_kernel, 0.0, t)),
+        t -> radial_σ2 * real(only(general_H * general_A^t * general_H')),
+    )
+
+    # TODO: Implement the case corresponding to complex Matern arguments
 end
