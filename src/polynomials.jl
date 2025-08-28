@@ -5,27 +5,33 @@ export +, show, isequal, isapprox, zero
 export integrate, materntocpe, cpetomaternmixture, ssm2GPKernel
 
 
-PolynomialExp(arr::Vector{Complex{T}}, beta::Complex{T}) where T <: AbstractFloat = PolynomialExp(Polynomial(arr), beta)
-PolynomialExp(arr::Vector{T}, beta::Complex{T}) where T <: AbstractFloat = PolynomialExp(complex.(arr), beta)
-PolynomialExp(arr::Vector{T}, beta::T) where T <: Real = PolynomialExp(complex.(float.(arr)), complex(float(beta)))
-PolynomialExp(arr::Vector{Complex{T}}, beta::Complex{T}) where T <: Integer = PolynomialExp(float.(arr), float(beta))
-PolynomialExp(arr::Vector{T1}, beta::Complex{T2}) where {T1 <: Integer, T2 <: AbstractFloat} = PolynomialExp(float.(arr), beta)
-PolynomialExp(arr::Vector{T1}, beta::Complex{T2}) where {T1 <: AbstractFloat, T2 <: Integer} = PolynomialExp(arr, float(beta))
-PolynomialExp(arr::Vector{T}, beta::Complex{T}) where T <: Integer = PolynomialExp(float.(arr), float(beta))
-PolynomialExp(arr::Vector{T1}, beta::T2) where {T1, T2 <: Real} = PolynomialExp(arr, complex(beta))
+PolynomialExp(arr::Vector{Complex{T}}, beta::Complex{T}) where T <: AbstractFloat = PolynomialExp(Polynomial{Complex{T}}(arr), beta)
+PolynomialExp(arr::Vector{Complex{T1}}, beta::Complex{T2}) where {T1 <: AbstractFloat, T2 <: Integer} = PolynomialExp(arr, float(beta))
+PolynomialExp(arr::Vector{Complex{T1}}, beta::Complex{T2}) where {T1 <: Integer, T2 <: Any} = PolynomialExp(float.(arr), beta)
+PolynomialExp(arr::Vector{T1}, beta::Complex{T2}) where {T1 <: Real, T2 <: Real} = PolynomialExp(complex.(float.(arr)), beta)
+PolynomialExp(arr::Vector{T1}, beta::T2) where {T1 <: Real, T2 <: Real} = PolynomialExp(arr, complex(float(beta)))
+#PolynomialExp(arr::Vector{T1}, beta::T2) where {T1 <: Integer, T2 <: Complex{AbstractFloat}} = PolynomialExp(float.(arr), beta)
+#PolynomialExp(arr::Vector{T1}, beta::T2) where {T1 <: AbstractFloat, T2 <: Complex{Integer}} = PolynomialExp(arr, float(beta))
+#PolynomialExp(arr::Vector{T}, beta::Complex{T}) where T <: Integer = PolynomialExp(float.(arr), float(beta))
+#PolynomialExp(arr::Vector{T1}, beta::T2) where {T1, T2 <: Real} = PolynomialExp(arr, complex(beta))
 PolynomialExp(c::T) where {T <: Number} = PolynomialExp([c], zero(T))
 
-function fast_poly(poly::PT, x::T) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
-    res = 0
+function fast_poly(poly::PT, x::Complex{T}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
+    res::Complex{T} = 0
     for n in Polynomials.degree(poly):-1:0
         res *= x 
         res += poly[n]
     end
-    res
+    return res
 end
 
 #(pe::PolynomialExp)(x) = pe.polynomial(x) * exp(-pe.beta * x);
-(pe::PolynomialExp)(x) = fast_poly(pe.polynomial, x) * exp(-pe.beta * x);
+(pe::PolynomialExp{T, PT})(x::T2) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}, T2 <: Real} = pe(complex(x));
+(pe::PolynomialExp{T, PT})(x::T2) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}, T2 <: Complex{Integer}} = pe(float(x));
+
+function (pe::PolynomialExp{T, PT})(x::Complex{T}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} 
+    return fast_poly(pe.polynomial, x) * exp(-pe.beta * x);
+end
 
 Base.oneunit(::Type{PolynomialExp{T}}) where {T} = PolynomialExp(oneunit(Complex{T}))
 Base.zero(::Type{PolynomialExp{T}}) where {T} = PolynomialExp(zero(Complex{T}))
@@ -37,12 +43,14 @@ Base.:/(pe::PolynomialExp, c::Number) = PolynomialExp(pe.polynomial / c, pe.beta
 degree(pe::PolynomialExp) = Polynomials.degree(pe.polynomial)
 
 #(cpe::CompoundPolynomialExp)(x) = sum([PolynomialExp(poly, beta)(x) for (beta, poly) in cpe.polynomials])
-function (cpe::CompoundPolynomialExp)(x) 
-    s = 0
+
+(cpe::CompoundPolynomialExp{T, PT})(x::T) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} = cpe(complex(x))
+function (cpe::CompoundPolynomialExp{T, PT})(x::Complex{T}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}}
+    s::Complex{T} = 0
     for (beta, poly) in cpe.polynomials
         s += fast_poly(poly, x) * exp(-beta * x)
     end
-    s
+    return s
 end
 
 CompoundPolynomialExp(itr::Vector{Pair{Complex{T}, PT}}) where {T <: AbstractFloat, PT <: Polynomial{Complex{T}}} = CompoundPolynomialExp(Dict(itr))

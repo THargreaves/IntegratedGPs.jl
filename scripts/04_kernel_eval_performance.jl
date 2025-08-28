@@ -30,7 +30,7 @@ println("Poly: $(round(evals_poly, sigdigits=SIGDIGITS))/s")
 println("Pure: $(round(evals_pure, sigdigits=SIGDIGITS))/s")
 println("")
 
-pexp_foo(x) = (1 + 2 * x + 3 * x * x) * exp(-x) 
+pexp_foo(x) = (1.0 + 2 * x + 3 * x * x) * exp(-x) 
 cpe_poly = PolynomialExp([1, 2, 3], 1)
 
 evals_cpe = evals_per_second(() -> cpe_poly(1.0))
