@@ -55,10 +55,17 @@ _I1(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _
 I1(gp::AbstractIntegratedRadialGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
 function kernel(gp::AbstractIntegratedRadialGPKernel, s, t)
-    Δ = abs(s - t)
     contribution(x) = x * I0(gp, x) - I1(gp, x)
 
-    return contribution(s) - contribution(Δ) + contribution(t)
+    k = if s == t
+        2 * contribution(s)
+    else
+        Δ = abs(s - t)
+        contribution(s) - contribution(Δ) + contribution(t)
+    end
+
+    @assert imag(k) ≈ 0 "Kernel evaluation returned a complex number: $k"
+    return real(k)
 end
 
 abstract type AbstractMaternGP <: AbstractRadialGPKernel end;
