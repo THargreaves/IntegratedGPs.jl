@@ -163,6 +163,14 @@ function Base.:*(
 end
 function Base.:*(
     cpe::CompoundPolynomialExp{T,PT}, p::PT2
+) where {T<:Complex,PT<:Polynomial{T},T2<:Integer,PT2<:Polynomial{T2}}
+    return CompoundPolynomialExp([
+        (beta => poly * Polynomial{complex(T)}(p)) for
+        (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
+    ])
+end
+function Base.:*(
+    cpe::CompoundPolynomialExp{T,PT}, p::PT2
 ) where {T<:Complex,PT<:Polynomial{T},T2<:Integer,PT2<:Polynomial{Complex{T2}}}
     return cpe * Polynomial{float(T2)}(p)
 end

@@ -8,7 +8,7 @@ function evals_per_second(f, timeout::Float64=1.0)
         f()
         cnt += 1
     end
-    cnt / timeout
+    return cnt / timeout
 end
 println("\n\nRUNNING TEST\n")
 

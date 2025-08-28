@@ -171,7 +171,7 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     return gp.C1_const - gp.C1_bessel * x^(ν + 1) * besselk(ν + 1, x)
 end
 
-struct IntegratedCPEMaternGP{T,PT<:Polynomial{T}} <: AbstractIntegratedMaternGP
+struct IntegratedCPEMaternGP{T<:Complex,PT<:Polynomial{T}} <: AbstractIntegratedMaternGP
     ν::T
     ρ::T
     σ2::T
@@ -185,7 +185,7 @@ struct IntegratedCPEMaternGP{T,PT<:Polynomial{T}} <: AbstractIntegratedMaternGP
     I1_cache::LRU{T,T}
 end
 
-function IntegratedCPEMaternGP(gp::CPEMaternGP{T}; cache_size=1000) where {T}
+function IntegratedCPEMaternGP(gp::CPEMaternGP{T}; cache_size=1000) where {T<:Complex}
     I0_cpe = I0_form(gp.cpe)
     I1_cpe = I1_form(gp.cpe)
 
@@ -193,7 +193,8 @@ function IntegratedCPEMaternGP(gp::CPEMaternGP{T}; cache_size=1000) where {T}
     I1_cache = LRU{T,T}(; maxsize=cache_size)
     return IntegratedCPEMaternGP(gp.ν, gp.ρ, gp.σ2, I0_cpe, I1_cpe, I0_cache, I1_cache)
 end
-
+I0(gp::IntegratedCPEMaternGP, t::T) where {T<:Real} = I0(gp, complex(t))
+I1(gp::IntegratedCPEMaternGP, t::T) where {T<:Real} = I1(gp, complex(t))
 _I0(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I0_cpe(t)
 _I1(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I1_cpe(t)
 
