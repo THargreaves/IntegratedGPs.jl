@@ -25,15 +25,6 @@ function PolynomialExp(arr::Vector{T1}, beta::T2) where {T1<:Real,T2<:Real}
 end
 PolynomialExp(c::T) where {T<:Number} = PolynomialExp([c], zero(T))
 
-function fast_poly(poly::PT, x::T) where {T<:Complex,PT<:ImmutablePolynomial{T}}
-    res::T = 0
-    for n in Polynomials.degree(poly):-1:0
-        res *= x
-        res += poly[n]
-    end
-    return res
-end
-
 #(pe::PolynomialExp)(x) = pe.polynomial(x) * exp(-pe.beta * x);
 function (pe::PolynomialExp{T,PT})(
     x::T2
@@ -42,7 +33,7 @@ function (pe::PolynomialExp{T,PT})(
 end;
 
 function (pe::PolynomialExp{T,PT})(x::T) where {T<:Complex,PT<:ImmutablePolynomial{T}}
-    return pe.polynomial(x) * exp(-pe.beta * x) #fast_poly(pe.polynomial, x) * exp(-pe.beta * x);
+    return evalpoly(x, pe.polynomial.coeffs) * exp(-pe.beta * x)
 end
 
 Base.oneunit(::Type{PolynomialExp{T}}) where {T<:Complex} = PolynomialExp(oneunit(T))
@@ -71,25 +62,36 @@ function (cpe::CompoundPolynomialExp{T,PT})(
 ) where {T<:Complex,PT<:ImmutablePolynomial{T}}
     s::T = 0
     for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
-        #pe = PolynomialExp{T,PT}(poly, beta)
-        s += poly(x) * exp(-beta * x)#fast_poly(poly, x) * exp(-beta * x)
+        s += evalpoly(x, poly.coeffs) * exp(-beta * x)
     end
     return s
+end
+
+function increase_poly_deg(
+    poly::PT, n::T2
+) where {T<:Complex,PT<:ImmutablePolynomial{T},T2<:Integer}
+    return ImmutablePolynomial(
+        NTuple{n + 1,T}(i <= Polynomials.degree(poly) ? poly[i] : 0 for i in 0:(n))
+    )
 end
 
 function CompoundPolynomialExp(
     dict::Dict{T,PT}
 ) where {T<:Complex,PT<:AbstractPolynomial{T}}
+    degs = [Polynomials.degree(v) for (k, v) in dict]
+    max_deg = max(0, maximum(degs))
+
     N = length(dict)
-    new_dict = Dict{T,ImmutablePolynomial{T}}()
+    new_dict = Dict{T,ImmutablePolynomial{T,:x,max_deg + 1}}()
     key_lookup = Vector{T}(undef, N)
-    value_lookup = Vector{ImmutablePolynomial{T}}(undef, N)
+    value_lookup = Vector{ImmutablePolynomial{T,:x,max_deg + 1}}(undef, N)
 
     for (i, (k, v)) in enumerate(dict)
+        new_poly = increase_poly_deg(v, max_deg)
         key_lookup[i] = k
-        value_lookup[i] = v
+        value_lookup[i] = new_poly
 
-        new_dict[k] = ImmutablePolynomial(v)
+        new_dict[k] = new_poly
     end
 
     return CompoundPolynomialExp(new_dict, key_lookup, value_lookup)
@@ -160,16 +162,26 @@ function Base.:+(a::PolynomialExp, b::PolynomialExp)
     return CompoundPolynomialExp(a) + CompoundPolynomialExp(b)
 end
 function Base.:+(
-    a::CompoundPolynomialExp{T,PT}, b::CompoundPolynomialExp{T,PT}
-) where {T<:Complex,PT<:ImmutablePolynomial{T}}
+    a::CompoundPolynomialExp{T,PT1}, b::CompoundPolynomialExp{T,PT2}
+) where {T<:Complex,PT1<:ImmutablePolynomial{T},PT2<:ImmutablePolynomial{T}}
+    max_deg = max(
+        maximum([Polynomials.degree(poly) for poly in a.value_lookup]),
+        maximum([Polynomials.degree(poly) for poly in b.value_lookup]),
+    )
     only_a = setdiff(keys(a.polynomials), keys(b.polynomials))
     only_b = setdiff(keys(b.polynomials), keys(a.polynomials))
     shared_betas = intersect(keys(a.polynomials), keys(b.polynomials))
 
-    a_pairs::Vector{Pair{T,PT}} = [beta => a.polynomials[beta] for beta in only_a]
-    b_pairs::Vector{Pair{T,PT}} = [beta => b.polynomials[beta] for beta in only_b]
-    shared_pairs::Vector{Pair{T,PT}} = [
-        beta => a.polynomials[beta] + b.polynomials[beta] for beta in shared_betas
+    a_pairs::Vector{Pair{T,ImmutablePolynomial{T,:x,max_deg + 1}}} = [
+        beta => increase_poly_deg(a.polynomials[beta], max_deg) for beta in only_a
+    ]
+    b_pairs::Vector{Pair{T,ImmutablePolynomial{T,:x,max_deg + 1}}} = [
+        beta => increase_poly_deg(b.polynomials[beta], max_deg) for beta in only_b
+    ]
+    shared_pairs::Vector{Pair{T,ImmutablePolynomial{T,:x,max_deg + 1}}} = [
+        beta =>
+            increase_poly_deg(a.polynomials[beta], max_deg) +
+            increase_poly_deg(b.polynomials[beta], max_deg) for beta in shared_betas
     ]
     return CompoundPolynomialExp(vcat(a_pairs, b_pairs, shared_pairs))
 end
@@ -181,6 +193,13 @@ end
 function Base.:*(
     cpe::CompoundPolynomialExp{T,PT}, p::PT
 ) where {T<:Complex,PT<:ImmutablePolynomial{T}}
+    return CompoundPolynomialExp([
+        (beta => poly * p) for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
+    ])
+end
+function Base.:*(
+    cpe::CompoundPolynomialExp{T,PT}, p::PT2
+) where {T<:Complex,PT<:ImmutablePolynomial{T},T2<:Complex,PT2<:AbstractPolynomial{T2}}
     return CompoundPolynomialExp([
         (beta => poly * p) for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
     ])

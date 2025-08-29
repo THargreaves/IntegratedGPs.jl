@@ -179,15 +179,16 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     return gp.C1_const - gp.C1_bessel * x^(ν + 1) * besselk(ν + 1, x)
 end
 
-struct IntegratedCPEMaternGP{T<:Complex,PT<:ImmutablePolynomial{T}} <:
-       AbstractIntegratedMaternGP
+struct IntegratedCPEMaternGP{
+    T<:Complex,PT1<:ImmutablePolynomial{T},PT2<:ImmutablePolynomial{T}
+} <: AbstractIntegratedMaternGP
     ν::T
     ρ::T
     σ2::T
 
     # Store the CPE closed-forms for I0 and I1 
-    I0_cpe::CompoundPolynomialExp{T,PT}
-    I1_cpe::CompoundPolynomialExp{T,PT}
+    I0_cpe::CompoundPolynomialExp{T,PT1}
+    I1_cpe::CompoundPolynomialExp{T,PT2}
 
     # LRU caches for evaluations of I0 and I1
     I0_cache::LRU{T,T}
