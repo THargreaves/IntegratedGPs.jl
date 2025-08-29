@@ -24,7 +24,8 @@ evals_poly = evals_per_second(() -> poly_poly(1.0))
 evals_pe = evals_per_second(() -> pe_poly(1.0))
 evals_pure = evals_per_second(() -> pure_poly(1.0))
 
-# TODO: CPE Evaluation seems to be way too slow across the board.
+# TODO: Why is CPE so slow?
+# TODO: Change T <: Complex to T <: Number
 
 println("Polynomials")
 println("CPE:  $(round(evals_cpe, sigdigits=SIGDIGITS))/s")

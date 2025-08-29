@@ -71,7 +71,8 @@ function (cpe::CompoundPolynomialExp{T,PT})(
 ) where {T<:Complex,PT<:ImmutablePolynomial{T}}
     s::T = 0
     for (beta, poly) in zip(cpe.key_lookup, cpe.value_lookup)
-        s += PolynomialExp(poly, beta)(x) #fast_poly(poly, x) * exp(-beta * x)
+        #pe = PolynomialExp{T,PT}(poly, beta)
+        s += poly(x) * exp(-beta * x)#fast_poly(poly, x) * exp(-beta * x)
     end
     return s
 end
