@@ -4,8 +4,8 @@ export PolynomialExp, CompoundPolynomialExp, SSM
 export +, show, isequal, isapprox, zero
 export integrate, materntocpe, cpetomaternmixture, ssm2GPKernel
 
-function PolynomialExp(arr::Vector{T}, beta::T) where {T}
-    return PolynomialExp(ImmutablePolynomial{float(T)}(arr), float(beta))
+function PolynomialExp(arr::Vector{T1}, beta::T2) where {T1,T2}
+    return PolynomialExp(ImmutablePolynomial{float(T1)}(arr), float(beta))
 end
 function PolynomialExp(arr::Vector{T1}, beta::T2) where {T1<:Real,T2<:Complex}
     return PolynomialExp(Vector{complex(T1)}(arr), beta)
@@ -71,6 +71,14 @@ function CompoundPolynomialExp(dict::Dict{T,PT}) where {T,PT<:AbstractPolynomial
 
     return CompoundPolynomialExp(new_dict, key_lookup, value_lookup)
 end
+function CompoundPolynomialExp(
+    dict::Dict{T,PT}
+) where {T<:Complex,T2<:Real,PT<:AbstractPolynomial{T2}}
+    new_pairs::Vector{Pair{T,ImmutablePolynomial{complex(T2)}}} = [
+        k => ImmutablePolynomial{complex(T2)}(v) for (k, v) in dict
+    ]
+    return CompoundPolynomialExp(new_pairs)
+end
 function CompoundPolynomialExp(itr::Vector{Pair{T,PT}}) where {T,PT<:AbstractPolynomial{T}}
     return CompoundPolynomialExp(Dict(itr))
 end
@@ -123,7 +131,7 @@ function CompoundPolynomialExp(pe::PolynomialExp{T,PT}) where {T,PT<:ImmutablePo
     return CompoundPolynomialExp(pe.beta => pe.polynomial)
 end
 
-function CompoundPolynomialExp(c::T) where {T}
+function CompoundPolynomialExp(c::T) where {T<:Number}
     return CompoundPolynomialExp(zero(float(T)) => ImmutablePolynomial{float(T)}([c]))
 end
 
