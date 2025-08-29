@@ -78,7 +78,7 @@ struct MaternGP{T} <: AbstractMaternGP
     σ2::T
 end
 
-struct CPEMaternGP{T<:Complex,PT<:ImmutablePolynomial{T}} <: AbstractMaternGP
+struct CPEMaternGP{T<:Number,PT<:ImmutablePolynomial{T}} <: AbstractMaternGP
     ν::T
     ρ::T
     σ2::T
@@ -97,7 +97,7 @@ end
 
 function CPEMaternGP(ν::T, ρ::T, σ2::T) where {T}
     cpe = materntocpe(ν, ρ, σ2)
-    return CPEMaternGP(complex(ν), complex(ρ), complex(σ2), cpe)
+    return CPEMaternGP(ν, ρ, σ2, cpe)
 end
 
 function constructmatern(ν::T, ρ::T, σ2::T) where {T<:AbstractFloat}
@@ -180,7 +180,7 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
 end
 
 struct IntegratedCPEMaternGP{
-    T<:Complex,PT1<:ImmutablePolynomial{T},PT2<:ImmutablePolynomial{T}
+    T<:Number,PT1<:ImmutablePolynomial{T},PT2<:ImmutablePolynomial{T}
 } <: AbstractIntegratedMaternGP
     ν::T
     ρ::T
@@ -195,7 +195,7 @@ struct IntegratedCPEMaternGP{
     I1_cache::LRU{T,T}
 end
 
-function IntegratedCPEMaternGP(gp::CPEMaternGP{T}; cache_size=1000) where {T<:Complex}
+function IntegratedCPEMaternGP(gp::CPEMaternGP{T}; cache_size=1000) where {T}
     I0_cpe = I0_form(gp.cpe)
     I1_cpe = I1_form(gp.cpe)
 

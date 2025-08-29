@@ -3,13 +3,13 @@ using Polynomials
 import Base: isapprox
 
 # Representation of Σ c_i * x^{n_i} exp(-beta x)
-struct PolynomialExp{T<:Complex,PT<:ImmutablePolynomial{T}}
+struct PolynomialExp{T<:Number,PT<:ImmutablePolynomial{T}}
     polynomial::PT
     beta::T
 end
 
 # Representation of Σ c_i * x^{n_i} exp(-beta_i x)
-struct CompoundPolynomialExp{T<:Complex,PT<:ImmutablePolynomial{T}}
+struct CompoundPolynomialExp{T<:Number,PT<:ImmutablePolynomial{T}}
     # It may be easier to just use a Vector of Tuples instead of a Dict.
     # Just make sure to store the keys in some well-defined order.
     polynomials::Dict{T,PT}
