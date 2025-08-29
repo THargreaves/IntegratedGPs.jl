@@ -624,17 +624,17 @@ end
 
     # Take the known cases of Matern -> CPE and check that the inverse still matches
     cpe_p0 = CPE(1 => [1])
-    target_p0 = [MaternGP(0.5, 1.0, 1.0)]
+    target_p0 = Mixture([MaternGP(0.5, 1.0, 1.0)])
     candidate_p0 = cpetomaternmixture(cpe_p0)
     @test functions_match(t -> kernel(candidate_p0, 0.0, t), t -> kernel(target_p0, 0.0, t))
 
     cpe_p1 = CPE(sqrt(3) => [1, sqrt(3)])
-    target_p1 = [MaternGP(1.5, 1.0, 1.0)]
+    target_p1 = Mixture([MaternGP(1.5, 1.0, 1.0)])
     candidate_p1 = cpetomaternmixture(cpe_p1)
     @test functions_match(t -> kernel(candidate_p1, 0.0, t), t -> kernel(target_p1, 0.0, t))
 
     cpe_p2 = CPE(sqrt(5) => [1, sqrt(5), 5 / 3])
-    target_p2 = [MaternGP(2.5, 1.0, 1.0)]
+    target_p2 = Mixture([MaternGP(2.5, 1.0, 1.0)])
     candidate_p2 = cpetomaternmixture(cpe_p2)
     @test functions_match(t -> kernel(candidate_p2, 0.0, t), t -> kernel(target_p2, 0.0, t))
 

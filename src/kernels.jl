@@ -9,6 +9,7 @@ export AbstractMaternGP,
     IntegratedMaternGP,
     CPEMaternGP,
     IntegratedCPEMaternGP,
+    Mixture,
     kernel,
     integrate,
     I0,
@@ -19,43 +20,47 @@ export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
 abstract type AbstractGPKernel end
-abstract type AbstractRadialGPKernel <: AbstractGPKernel end
-abstract type AbstractIntegratedGPKernel <: AbstractGPKernel end
-abstract type AbstractIntegratedRadialGPKernel <: AbstractIntegratedGPKernel end
+abstract type AbstractRadialKernel <: AbstractGPKernel end
+abstract type AbstractIntegratedKernel <: AbstractGPKernel end
+abstract type AbstractIntegratedRadialKernel <: AbstractIntegratedKernel end
 
-struct Integrated{T<:AbstractGPKernel} <: AbstractIntegratedGPKernel
+struct Integrated{T<:AbstractGPKernel} <: AbstractIntegratedKernel
     base_kernel::T
+end
+
+struct Mixture{T<:AbstractGPKernel} <: AbstractGPKernel
+    mixture::Vector{T}
 end
 
 function kernel(gp::AbstractGPKernel, s, t)
     return error("GP Kernel has not been implemented.")
 end
-function kernel(gp_mixture::Vector{T}, s, t) where {T<:AbstractGPKernel}
-    return real(sum(gp -> kernel(gp, s, t), gp_mixture))
+function kernel(gp_mixture::Mixture{T}, s, t) where {T<:AbstractGPKernel}
+    return real(sum(gp -> kernel(gp, s, t), gp_mixture.mixture))
 end
 
 function kernel(igp::Integrated{T}, s, t) where {T<:AbstractGPKernel}
     return hcubature(x -> kernel(igp.base_kernel, x[1], x[2]), [0.0, 0.0], [s, t])
 end
 
-function I0(gp::AbstractIntegratedRadialGPKernel, t)
+function I0(gp::AbstractIntegratedRadialKernel, t)
     get!(gp.I0_cache, t) do
         _I0(gp, t)
     end
 end
-_I0(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _I0 
+_I0(gp::AbstractIntegratedRadialKernel, t) = error("The integrated radial GP _I0 
                                                         function has not been implemented.")
 
-function I1(gp::AbstractIntegratedRadialGPKernel, t)
+function I1(gp::AbstractIntegratedRadialKernel, t)
     get!(gp.I1_cache, t) do
         _I1(gp, t)
     end
 end
-_I1(gp::AbstractIntegratedRadialGPKernel, t) = error("The integrated radial GP _I1 
+_I1(gp::AbstractIntegratedRadialKernel, t) = error("The integrated radial GP _I1 
                                                         function has not been implemented.")
-I1(gp::AbstractIntegratedRadialGPKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
+I1(gp::AbstractIntegratedRadialKernel, t1, t2) = I1(gp, t2) - I1(gp, t1)
 
-function kernel(gp::AbstractIntegratedRadialGPKernel, s, t)
+function kernel(gp::AbstractIntegratedRadialKernel, s, t)
     contribution(x) = x * I0(gp, x) - I1(gp, x)
 
     k = if s == t
@@ -70,8 +75,8 @@ function kernel(gp::AbstractIntegratedRadialGPKernel, s, t)
     return k
 end
 
-abstract type AbstractMaternGP <: AbstractRadialGPKernel end;
-abstract type AbstractIntegratedMaternGP <: AbstractIntegratedRadialGPKernel end;
+abstract type AbstractMaternGP <: AbstractRadialKernel end;
+abstract type AbstractIntegratedMaternGP <: AbstractIntegratedRadialKernel end;
 
 struct MaternGP{T} <: AbstractMaternGP
     ν::T
@@ -220,12 +225,21 @@ _I1(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I1_cpe(t)
 AbstractIntegratedMaternGP(gp::MaternGP) = IntegratedMaternGP(gp)
 AbstractIntegratedMaternGP(gp::CPEMaternGP) = IntegratedCPEMaternGP(gp)
 
-function integrate(gp_mixture::Vector{T}) where {T<:AbstractGPKernel}
-    return [integrate(gp) for gp in gp_mixture]
-end
+integrate(::Type{T}) where {T<:AbstractGPKernel} = Integrated{T}
+integrate(::Type{T}) where {T<:MaternGP} = IntegratedMaternGP
+integrate(::Type{T}) where {T<:CPEMaternGP} = IntegratedCPEMaternGP
+integrate(::Type{Mixture{T}}) where {T<:AbstractGPKernel} = IntegratedMixture{integrate(T)}
+
 integrate(gp::T) where {T<:AbstractGPKernel} = Integrated{T}(gp)
 integrate(gp::AbstractMaternGP) = AbstractIntegratedMaternGP(gp)
+function integrate(gp_mixture::Mixture{T}) where {T<:AbstractGPKernel}
+    return Mixture{integrate(T)}([integrate(gp) for gp in gp_mixture.mixture])
+end
 
+isintegrated(gp::T) where {T<:AbstractGPKernel} = typeof(gp) <: AbstractIntegratedKernel
+function isintegrated(gp_mixture::Mixture{T}) where {T<:AbstractGPKernel}
+    return all(isintegrated(gp), gp_mixture.mixture)
+end
 function windowed_cholesky_update!(F::Cholesky, ks::AbstractVector)
     """
     Update the Cholesky factorization of a covariance kernel matrix from one window shift.

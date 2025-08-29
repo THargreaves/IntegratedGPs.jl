@@ -317,7 +317,7 @@ function cpetomaternmixture(
         error("Matern mixture vector has not been filled up.")
 
     # Reduce the mixture to only non-trivial components
-    return filter((gp::CPEMaternGP) -> !iszero(gp.σ2), matern_mixture)
+    return Mixture(filter((gp::CPEMaternGP) -> !iszero(gp.σ2), matern_mixture))
 end
 
 struct SSM{T}
