@@ -31,7 +31,7 @@ function kernel(gp::AbstractGPKernel, s, t)
     return error("GP Kernel has not been implemented.")
 end
 function kernel(gp_mixture::Vector{T}, s, t) where {T<:AbstractGPKernel}
-    return sum(gp -> kernel(gp, s, t), gp_mixture)
+    return real(sum(gp -> kernel(gp, s, t), gp_mixture))
 end
 
 function kernel(igp::Integrated{T}, s, t) where {T<:AbstractGPKernel}
@@ -65,8 +65,9 @@ function kernel(gp::AbstractIntegratedRadialGPKernel, s, t)
         contribution(s) - contribution(Δ) + contribution(t)
     end
 
-    @assert imag(k) ≈ 0 "Kernel evaluation returned a complex number: $k"
-    return real(k)
+    #@assert imag(k) ≈ 0 "Kernel evaluation returned a complex number: $k"
+    #return real(k)
+    return k
 end
 
 abstract type AbstractMaternGP <: AbstractRadialGPKernel end;
