@@ -1,0 +1,4 @@
+[deps]
+IntegratedMaternGPs = "91454fe4-b873-40e4-a420-6b0a4e03942a"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Polynomials = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"

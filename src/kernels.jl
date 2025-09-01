@@ -322,19 +322,48 @@ function windowed_cholesky_remove_first!(F::Cholesky)
     d = size(F.U, 1)
     U = F.U
 
-    @inbounds @views begin
+    @inbounds begin
         # Remove the first time point using a rank-one update
-        lowrankupdate!(Cholesky(UpperTriangular(U[2:d, 2:d])), U[1, 2:d])
+        # my_lowrankupdate!(F.factors, U[1, 2:d])
+        my_lowrankupdate!(F.factors)
 
-        # Shuffle the result to the top-left
-        for i in 1:(d - 1)
-            for j in 1:(d - 1)
-                U[i, j] = U[i + 1, j + 1]
-            end
-        end
+        # Shuffle the first column up
+        # for i in 1:(d - 1)
+        #     # Skip validation by setting data directly
+        #     F.factors[i, 1] = F.factors[i + 1, j + 1]
+        # end
+
+        # for i in 1:(d - 1)
+        #     @views copyto!(U.data[i, 1:(d - 1)], U.data[i + 1, 2:d])
+        # end
     end
 
     return F
+end
+
+function my_lowrankupdate!(A::AbstractMatrix)
+    n = size(A, 1)
+    v = similar(A, n - 1)
+    copyto!(v, @view A[1, 2:end])
+
+    @inbounds for i in 2:n
+
+        # Compute Givens rotation
+        c, s, r = LinearAlgebra.givensAlgorithm(A[i, i], v[i - 1])
+
+        # Store new diagonal element
+        A[i - 1, i - 1] = r
+
+        # Update remaining elements in row/column
+        for j in (i + 1):n
+            Aij = A[i, j]
+            vj = v[j - 1]
+            A[i - 1, j - 1] = c * Aij + s * vj
+            v[j - 1] = -s' * Aij + c * vj
+        end
+    end
+
+    return A
 end
 
 function windowed_cholesky_add_last!(F::Cholesky, ks::AbstractVector)
