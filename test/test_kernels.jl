@@ -73,7 +73,7 @@ end
     @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
 end
 
-@testitem "Integrated Matern Kernel" begin
+@testitem "Integrated CPE Matern Kernel" begin
     using IntegratedMaternGPs
     using HCubature
 
@@ -91,6 +91,38 @@ end
 
     # Test s = t case
     s = t = 0.8
+    kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
+    kernel_analytical = kernel(int_gp, s, t)
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
+end
+
+@testitem "Integrated Rational Quadratic Kernel" begin
+    using IntegratedMaternGPs
+    using HCubature
+
+    α = 1.3
+    l = 2.0
+    σ2 = 1.0
+    gp = RationalQuadraticGP(α, l, σ2)
+    int_gp = integrate(gp)
+
+    # Test s ≠ t case
+    s, t = 0.8, 1.1
+    kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
+    kernel_analytical = kernel(int_gp, s, t)
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
+
+    # Test s = t case
+    s = t = 0.8
+    kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
+    kernel_analytical = kernel(int_gp, s, t)
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
+
+    # Special case where α = 1  
+    α = 1.0
+    gp = RationalQuadraticGP(α, l, σ2)
+    int_gp = integrate(gp)
+    s, t = 0.8, 1.1
     kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
     kernel_analytical = kernel(int_gp, s, t)
     @test kernel_numeric ≈ kernel_analytical rtol = 1e-8

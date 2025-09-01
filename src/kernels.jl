@@ -1,6 +1,7 @@
 import Bessels: besselk
 import SpecialFunctions: gamma
 import Struve: struvel
+import HypergeometricFunctions: pFq
 using LRUCache
 
 export AbstractMaternGP,
@@ -9,6 +10,8 @@ export AbstractMaternGP,
     IntegratedMaternGP,
     CPEMaternGP,
     IntegratedCPEMaternGP,
+    RationalQuadraticGP,
+    IntegratedRationalQuadraticGP,
     Mixture,
     kernel,
     integrate,
@@ -40,7 +43,7 @@ function kernel(gp_mixture::Mixture{T}, s, t) where {T<:AbstractGPKernel}
 end
 
 function kernel(igp::Integrated{T}, s, t) where {T<:AbstractGPKernel}
-    return hcubature(x -> kernel(igp.base_kernel, x[1], x[2]), [0.0, 0.0], [s, t])
+    return hcubature(x -> kernel(igp.base_kernel, x[1], x[2]), [0.0, 0.0], [s, t])[1]
 end
 
 function I0(gp::AbstractIntegratedRadialKernel, t)
@@ -147,7 +150,7 @@ struct IntegratedMaternGP{T} <: AbstractIntegratedMaternGP
     I1_cache::LRU{T,T}
 end
 
-function IntegratedMaternGP(gp::MaternGP{T}; cache_size=1000) where {T}
+function IntegratedMaternGP(gp::MaternGP; cache_size=1000)
     return IntegratedMaternGP(gp.ν, gp.ρ, gp.σ2; cache_size)
 end
 function IntegratedMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
@@ -222,16 +225,70 @@ end
 _I0(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I0_cpe(t)
 _I1(gp::IntegratedCPEMaternGP{T}, t) where {T} = gp.I1_cpe(t)
 
+struct RationalQuadraticGP{T} <: AbstractGPKernel
+    α::T
+    l::T
+    σ2::T
+end
+
+function kernel(gp::RationalQuadraticGP, s, t)
+    α, l, σ2 = gp.α, gp.l, gp.σ2
+
+    d = abs(s - t)
+    return σ2 * (1 + (d^2) / (2 * α * l^2))^(-α)
+end
+
+struct IntegratedRationalQuadraticGP{T} <: AbstractIntegratedRadialKernel
+    α::T
+    l::T
+    σ2::T
+    # LRU caches for evaluations of I0 and I1
+    I0_cache::LRU{T,T}
+    I1_cache::LRU{T,T}
+end
+
+function IntegratedRationalQuadraticGP(gp::RationalQuadraticGP; cache_size=1000)
+    return IntegratedRationalQuadraticGP(gp.α, gp.l, gp.σ2; cache_size)
+end
+function IntegratedRationalQuadraticGP(α::T, l::T, σ2::T; cache_size=1000) where {T}
+    I0_cache = LRU{T,T}(; maxsize=cache_size)
+    I1_cache = LRU{T,T}(; maxsize=cache_size)
+    return IntegratedRationalQuadraticGP{T}(α, l, σ2, I0_cache, I1_cache)
+end
+
+function _I0(gp::IntegratedRationalQuadraticGP{T}, t) where {T}
+    α, l, σ2 = gp.α, gp.l, gp.σ2
+
+    # Special case
+    t == 0 && return T(0)
+
+    return σ2 * t * pFq((T(0.5), α), (T(1.5),), -t^2 / (2 * α * l^2))
+end
+
+function _I1(gp::IntegratedRationalQuadraticGP{T}, t) where {T}
+    α, l, σ2 = gp.α, gp.l, gp.σ2
+
+    # Special cases
+    t == 0 && return T(0)
+    if α == 1
+        return σ2 * l^2 * log(1 + t^2 / (2 * l^2))
+    end
+
+    return σ2 * α * l^2 * (1 - (1 + t^2 / (2 * α * l^2))^(1 - α)) / (α - 1)
+end
+
 AbstractIntegratedMaternGP(gp::MaternGP) = IntegratedMaternGP(gp)
 AbstractIntegratedMaternGP(gp::CPEMaternGP) = IntegratedCPEMaternGP(gp)
 
 integrate(::Type{T}) where {T<:AbstractGPKernel} = Integrated{T}
 integrate(::Type{T}) where {T<:MaternGP} = IntegratedMaternGP
 integrate(::Type{T}) where {T<:CPEMaternGP} = IntegratedCPEMaternGP
+integrate(::Type{T}) where {T<:RationalQuadraticGP} = IntegratedRationalQuadraticGP
 integrate(::Type{Mixture{T}}) where {T<:AbstractGPKernel} = IntegratedMixture{integrate(T)}
 
 integrate(gp::T) where {T<:AbstractGPKernel} = Integrated{T}(gp)
 integrate(gp::AbstractMaternGP) = AbstractIntegratedMaternGP(gp)
+integrate(gp::RationalQuadraticGP) = IntegratedRationalQuadraticGP(gp)
 function integrate(gp_mixture::Mixture{T}) where {T<:AbstractGPKernel}
     return Mixture{integrate(T)}([integrate(gp) for gp in gp_mixture.mixture])
 end
