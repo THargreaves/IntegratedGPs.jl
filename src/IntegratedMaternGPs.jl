@@ -2,9 +2,9 @@ module IntegratedMaternGPs
 
 using LinearAlgebra
 
-include("polynomial_structs.jl")
+include("polynomials.jl")
 include("kernels.jl")
 include("linalg.jl")
-include("polynomials.jl")
+include("conversions.jl")
 
 end # module IntegratedMaternGPs
