@@ -107,18 +107,6 @@ function CompoundPolynomialExp(
         Dict([float(k) => ImmutablePolynomial{float(T2)}(v) for (k, v) in itr])
     )
 end
-function CompoundPolynomialExp(
-    itr::Vector{Pair{T,PT}}
-) where {T<:Complex,T2<:Real,PT<:AbstractPolynomial{T2}}
-    return CompoundPolynomialExp(
-        Dict([k => ImmutablePolynomial{complex(T2)}(v) for (k, v) in itr])
-    )
-end
-function CompoundPolynomialExp(
-    itr::Vector{Pair{T,PT}}
-) where {T<:Real,T2<:Complex,PT<:AbstractPolynomial{T2}}
-    return CompoundPolynomialExp(Dict([complex(k) => v for (k, v) in itr]))
-end
 function CompoundPolynomialExp(itr::Vector{Pair{T,PT}}) where {T,T2,PT<:Vector{T2}}
     return CompoundPolynomialExp(
         Dict([(float(k), ImmutablePolynomial(float.(v))) for (k, v) in itr])
