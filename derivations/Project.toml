@@ -1,0 +1,5 @@
+[deps]
+ArbNumerics = "7e558dbc-694d-5a72-987c-6f4ebed21442"
+Bessels = "0e736298-9ec6-45e8-9647-e4fc86a2fe38"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Struve = "bbbc800e-c7bf-11e8-107b-9b6d1d23829a"
