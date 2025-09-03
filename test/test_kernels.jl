@@ -50,6 +50,30 @@ end
     )
 end
 
+@testitem "Stable SturveL-BesselK product" begin
+    using IntegratedMaternGPs
+    using ArbNumerics
+    using Struve
+
+    ν = 3.5
+    x = 50.0
+
+    # Verify large approximation is used
+    @assert Struve.struvem_large_arg_cutoff(ν, x)
+
+    prec = 512
+    setworkingprecision(ArbReal; bits=prec)
+
+    # Check for in both order cases
+    for (νs, νb) in [(ν, ν - 1), (ν - 1, ν)]
+        bessel_struve_stable = IntegratedMaternGPs._besselk_struvel_large_arg(νb, νs, x)
+        struvel_arb = Struve.struvel_power_series(BigFloat(νs, prec), BigFloat(x, prec))
+        besselk_arb = ArbNumerics.besselk(ArbReal(νb), ArbReal(x))
+        bessel_struve_arb = besselk_arb * ArbReal(struvel_arb)
+        @test isapprox(bessel_struve_stable, bessel_struve_arb; rtol=1E-12)
+    end
+end
+
 @testitem "Integrated Matern Kernel" begin
     using IntegratedMaternGPs
     using HCubature

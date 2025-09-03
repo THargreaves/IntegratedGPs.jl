@@ -1,6 +1,6 @@
-import Bessels: besselk
+import Bessels: besselk, besselkx, besselix
 import SpecialFunctions: gamma
-import Struve: struvel
+using Struve: Struve
 import HypergeometricFunctions: pFq
 using LRUCache
 
@@ -172,10 +172,33 @@ function _I0(gp::IntegratedMaternGP{T}, t) where {T}
     t == 0 && return T(0)
 
     x = sqrt(2ν) * t / ρ
+    return gp.C0 * t * (_besselk_struvel(ν, ν - 1, x) + _besselk_struvel(ν - 1, ν, x))
+end
+
+"""
+Compute the product of besselk(νb, x) and struvel(νs, x) in a numerically stable manner.
+We use the relation L_ν(x) = M_ν(x) + I_ν(x) and make use of the exponentially scaled forms
+of the two Bessel functions.
+"""
+function _besselk_struvel(νb, νs, x)
+    if Struve.struvem_large_arg_cutoff(νs, x)
+        return _besselk_struvel_large_arg(νb, νs, x)
+    else
+        return _besselk_struvel_small_arg(νb, νs, x)
+    end
+end
+function _besselk_struvel_large_arg(νb, νs, x)
+    # TODO: It appears that Struve.struvem_large_argument has the wrong sign hence the
+    # correction below. This should be verified and fixed upstream
+    # TODO: M_ν(x) ~ -2^(1 - ν) / (sqrt(π) * Γ(ν + 0.5)) * x^(ν - 1) for large x so still
+    # potential for overflow if ν is large. Should introduce a further cutoff once the
+    # product is zero up to machine precision.
     return (
-        gp.C0 * t * (besselk(ν, x) * struvel(ν - 1, x) + struvel(ν, x) * besselk(ν - 1, x))
+        -Struve.struvem_large_argument(νs, x) * besselk(νb, x) +
+        besselkx(νb, x) * besselix(νs, x)
     )
 end
+_besselk_struvel_small_arg(νb, νs, x) = Struve.struvel(νs, x) * besselk(νb, x)
 
 function _I1(gp::IntegratedMaternGP{T}, t) where {T}
     ν = gp.ν
