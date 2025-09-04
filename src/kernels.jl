@@ -37,8 +37,6 @@ function Base.iterate(d::NullCache{K,V}) where {K,V} end
 Base.length(d::NullCache{K,V}) where {K,V} = 0;
 Base.haskey(d::NullCache{K,V}, k) where {K,V} = false;
 Base.empty(d::NullCache{K,V}) where {K,V} = NullCache{K,V}()
-#get!(d::NullCache{K,V}, key::K, default) where {K,V} = default
-#get!(default::DT, d::NullCache{K,V}, key::K) where {DT<:Function,K,V} = default()
 
 struct Integrated{T<:AbstractGPKernel} <: AbstractIntegratedKernel
     base_kernel::T
