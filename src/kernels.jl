@@ -4,7 +4,8 @@ using Struve: Struve
 import HypergeometricFunctions: pFq
 using LRUCache
 
-export AbstractMaternGP,
+export AbstractGPKernel,
+    AbstractMaternGP,
     AbstractIntegratedMaternGP,
     MaternGP,
     IntegratedMaternGP,
@@ -18,7 +19,8 @@ export AbstractMaternGP,
     I0,
     I1,
     Integrated,
-    constructmatern
+    constructmatern,
+    NullCache
 export windowed_cholesky_update!,
     windowed_cholesky_remove_first!, windowed_cholesky_add_last!
 
@@ -26,6 +28,17 @@ abstract type AbstractGPKernel end
 abstract type AbstractRadialKernel <: AbstractGPKernel end
 abstract type AbstractIntegratedKernel <: AbstractGPKernel end
 abstract type AbstractIntegratedRadialKernel <: AbstractIntegratedKernel end
+
+struct NullCache{K,V} <: AbstractDict{K,V} end
+function Base.getindex(d::NullCache{K,V}, k) where {K,V} end
+function Base.setindex!(d::NullCache{K,V}, v, k) where {K,V} end
+function Base.delete!(d::NullCache{K,V}, k) where {K,V} end
+function Base.iterate(d::NullCache{K,V}) where {K,V} end
+Base.length(d::NullCache{K,V}) where {K,V} = 0;
+Base.haskey(d::NullCache{K,V}, k) where {K,V} = false;
+Base.empty(d::NullCache{K,V}) where {K,V} = NullCache{K,V}()
+#get!(d::NullCache{K,V}, key::K, default) where {K,V} = default
+#get!(default::DT, d::NullCache{K,V}, key::K) where {DT<:Function,K,V} = default()
 
 struct Integrated{T<:AbstractGPKernel} <: AbstractIntegratedKernel
     base_kernel::T
@@ -137,7 +150,7 @@ end
 
 kernel(gp::CPEMaternGP, s, t) = gp.cpe(abs(s - t))
 
-struct IntegratedMaternGP{T} <: AbstractIntegratedMaternGP
+struct IntegratedMaternGP{T,DT<:AbstractDict{T,T}} <: AbstractIntegratedMaternGP
     ν::T
     ρ::T
     σ2::T
@@ -145,9 +158,9 @@ struct IntegratedMaternGP{T} <: AbstractIntegratedMaternGP
     C0::T
     C1_const::T
     C1_bessel::T
-    # LRU caches for evaluations of I0 and I1
-    I0_cache::LRU{T,T}
-    I1_cache::LRU{T,T}
+    # Caches for evaluations of I0 and I1
+    I0_cache::DT
+    I1_cache::DT
 end
 
 function IntegratedMaternGP(gp::MaternGP; cache_size=1000)
@@ -159,9 +172,9 @@ function IntegratedMaternGP(ν::T, ρ::T, σ2::T; cache_size=1000) where {T}
     C1_const = σ2 * ρ^2
     C1_bessel = σ2 * 2^(1 - ν) * ρ^2 / (gamma(ν) * 2ν)
 
-    I0_cache = LRU{T,T}(; maxsize=cache_size)
-    I1_cache = LRU{T,T}(; maxsize=cache_size)
-    return IntegratedMaternGP{T}(ν, ρ, σ2, C0, C1_const, C1_bessel, I0_cache, I1_cache)
+    I0_cache = cache_size == 0 ? NullCache{T,T}() : LRU{T,T}(; maxsize=cache_size)
+    I1_cache = cache_size == 0 ? NullCache{T,T}() : LRU{T,T}(; maxsize=cache_size)
+    return IntegratedMaternGP(ν, ρ, σ2, C0, C1_const, C1_bessel, I0_cache, I1_cache)
 end
 
 function _I0(gp::IntegratedMaternGP{T}, t) where {T}
@@ -212,7 +225,7 @@ function _I1(gp::IntegratedMaternGP{T}, t) where {T}
 end
 
 struct IntegratedCPEMaternGP{
-    T<:Number,PT1<:ImmutablePolynomial{T},PT2<:ImmutablePolynomial{T}
+    T<:Number,PT1<:ImmutablePolynomial{T},PT2<:ImmutablePolynomial{T},DT<:AbstractDict{T,T}
 } <: AbstractIntegratedMaternGP
     ν::T
     ρ::T
@@ -222,17 +235,17 @@ struct IntegratedCPEMaternGP{
     I0_cpe::CompoundPolynomialExp{T,PT1}
     I1_cpe::CompoundPolynomialExp{T,PT2}
 
-    # LRU caches for evaluations of I0 and I1
-    I0_cache::LRU{T,T}
-    I1_cache::LRU{T,T}
+    # Caches for evaluations of I0 and I1
+    I0_cache::DT
+    I1_cache::DT
 end
 
 function IntegratedCPEMaternGP(gp::CPEMaternGP{T}; cache_size=1000) where {T}
     I0_cpe = I0_form(gp.cpe)
     I1_cpe = I1_form(gp.cpe)
 
-    I0_cache = LRU{T,T}(; maxsize=cache_size)
-    I1_cache = LRU{T,T}(; maxsize=cache_size)
+    I0_cache = cache_size == 0 ? NullCache{T,T}() : LRU{T,T}(; maxsize=cache_size)
+    I1_cache = cache_size == 0 ? NullCache{T,T}() : LRU{T,T}(; maxsize=cache_size)
     return IntegratedCPEMaternGP(gp.ν, gp.ρ, gp.σ2, I0_cpe, I1_cpe, I0_cache, I1_cache)
 end
 function I0(
@@ -261,22 +274,23 @@ function kernel(gp::RationalQuadraticGP, s, t)
     return σ2 * (1 + (d^2) / (2 * α * l^2))^(-α)
 end
 
-struct IntegratedRationalQuadraticGP{T} <: AbstractIntegratedRadialKernel
+struct IntegratedRationalQuadraticGP{T,DT<:AbstractDict{T,T}} <:
+       AbstractIntegratedRadialKernel
     α::T
     l::T
     σ2::T
-    # LRU caches for evaluations of I0 and I1
-    I0_cache::LRU{T,T}
-    I1_cache::LRU{T,T}
+    # Caches for evaluations of I0 and I1
+    I0_cache::DT
+    I1_cache::DT
 end
 
 function IntegratedRationalQuadraticGP(gp::RationalQuadraticGP; cache_size=1000)
     return IntegratedRationalQuadraticGP(gp.α, gp.l, gp.σ2; cache_size)
 end
 function IntegratedRationalQuadraticGP(α::T, l::T, σ2::T; cache_size=1000) where {T}
-    I0_cache = LRU{T,T}(; maxsize=cache_size)
-    I1_cache = LRU{T,T}(; maxsize=cache_size)
-    return IntegratedRationalQuadraticGP{T}(α, l, σ2, I0_cache, I1_cache)
+    I0_cache = cache_size == 0 ? NullCache{T,T}() : LRU{T,T}(; maxsize=cache_size)
+    I1_cache = cache_size == 0 ? NullCache{T,T}() : LRU{T,T}(; maxsize=cache_size)
+    return IntegratedRationalQuadraticGP(α, l, σ2, I0_cache, I1_cache)
 end
 
 function _I0(gp::IntegratedRationalQuadraticGP{T}, t) where {T}
@@ -300,8 +314,12 @@ function _I1(gp::IntegratedRationalQuadraticGP{T}, t) where {T}
     return σ2 * α * l^2 * (1 - (1 + t^2 / (2 * α * l^2))^(1 - α)) / (α - 1)
 end
 
-AbstractIntegratedMaternGP(gp::MaternGP) = IntegratedMaternGP(gp)
-AbstractIntegratedMaternGP(gp::CPEMaternGP) = IntegratedCPEMaternGP(gp)
+function AbstractIntegratedMaternGP(gp::MaternGP; cache_size=1000)
+    return IntegratedMaternGP(gp; cache_size=cache_size)
+end
+function AbstractIntegratedMaternGP(gp::CPEMaternGP; cache_size=1000)
+    return IntegratedCPEMaternGP(gp; cache_size=cache_size)
+end
 
 integrate(::Type{T}) where {T<:AbstractGPKernel} = Integrated{T}
 integrate(::Type{T}) where {T<:MaternGP} = IntegratedMaternGP
@@ -309,11 +327,17 @@ integrate(::Type{T}) where {T<:CPEMaternGP} = IntegratedCPEMaternGP
 integrate(::Type{T}) where {T<:RationalQuadraticGP} = IntegratedRationalQuadraticGP
 integrate(::Type{Mixture{T}}) where {T<:AbstractGPKernel} = IntegratedMixture{integrate(T)}
 
-integrate(gp::T) where {T<:AbstractGPKernel} = Integrated{T}(gp)
-integrate(gp::AbstractMaternGP) = AbstractIntegratedMaternGP(gp)
-integrate(gp::RationalQuadraticGP) = IntegratedRationalQuadraticGP(gp)
-function integrate(gp_mixture::Mixture{T}) where {T<:AbstractGPKernel}
-    return Mixture{integrate(T)}([integrate(gp) for gp in gp_mixture.mixture])
+integrate(gp::T; cache_size=1000) where {T<:AbstractGPKernel} = Integrated{T}(gp)
+function integrate(gp::AbstractMaternGP; cache_size=1000)
+    return AbstractIntegratedMaternGP(gp; cache_size=cache_size)
+end
+function integrate(gp::RationalQuadraticGP; cache_size=1000)
+    return IntegratedRationalQuadraticGP(gp; cache_size=cache_size)
+end
+function integrate(gp_mixture::Mixture{T}; cache_size=1000) where {T<:AbstractGPKernel}
+    return Mixture{integrate(T)}([
+        integrate(gp; cache_size=cache_sie) for gp in gp_mixture.mixture
+    ])
 end
 
 isintegrated(gp::T) where {T<:AbstractGPKernel} = typeof(gp) <: AbstractIntegratedKernel
