@@ -1,5 +1,9 @@
 using IntegratedMaternGPs
 using Polynomials
+using Crayons
+using ProgressMeter
+
+highlight = Crayon(; foreground=:green)
 
 function evals_per_second(f, timeout::Float64=1.0)
     cnt::Int = 0
@@ -10,9 +14,26 @@ function evals_per_second(f, timeout::Float64=1.0)
     end
     return cnt / timeout
 end
-println("\n\nRUNNING TEST\n")
 
-SIGDIGITS = 4
+S = 1.0
+T = 2.0
+bench(gp::GPT) where {GPT<:AbstractGPKernel} = evals_per_second(() -> kernel(gp, S, T))
+
+SIGDIGITS = 3
+function display(x::T) where {T<:AbstractFloat}
+    x_exp10::Int = floor(log10(x))
+    ref = x / (10.0^x_exp10)
+    ref = round(ref; sigdigits=SIGDIGITS)
+    digs = zeros(Int, SIGDIGITS)
+    for i in 1:SIGDIGITS
+        dig = floor(ref)
+        digs[i] = Int(dig)
+        ref = 10 * (ref - dig)
+    end
+    return "$(digs[1]).$(join(digs[2:end]))e$(x_exp10)"
+end
+
+println(highlight("\n\nSTARTING BENCHMARK TEST\n"))
 
 pure_poly(x) = 1 + 2 * x + 3 * x * x
 poly_poly = Polynomial([1, 2, 3])
@@ -42,36 +63,80 @@ println("PolyExp:  $(round(evals_cpe, sigdigits=SIGDIGITS))/s")
 println("Foo:      $(round(evals_foo, sigdigits=SIGDIGITS))/s")
 println("")
 
-ν = 3.5
-ρ = 2.4
-σ2 = 5.4
-gp_gen = MaternGP(ν, ρ, σ2)
-gp_cpe = CPEMaternGP(ν, ρ, σ2)
+println(highlight("<> Evaluating kernels..."))
 
-evals_gen = evals_per_second(() -> kernel(gp_gen, 0.0, 1.0))
-evals_cpe = evals_per_second(() -> kernel(gp_cpe, 0.0, 1.0))
+cpe_ν = 3.5
+cpe_ρ = 2.4
+cpe_σ2 = 5.4
 
-println("Standard kernel:")
-println("General:   $(round(evals_gen, sigdigits=SIGDIGITS))/s")
-println("CPE:       $(round(evals_cpe, sigdigits=SIGDIGITS))/s")
+rq_α = 5.7
+rq_l = 2.3
+rq_σ2 = 3.1
+
+# TODO: include Squared Exponential
+
+base_kernels = [
+    ("General Matern", MaternGP(3.7, 2.4, 5.4)),
+    ("General CPE Matern", MaternGP(cpe_ν, cpe_ρ, cpe_σ2)),
+    ("Pure CPE Matern", CPEMaternGP(cpe_ν, cpe_ρ, cpe_σ2)),
+    ("Rational Quadratic", RationalQuadraticGP(rq_α, rq_l, rq_σ2)),
+]
+
+kernel_types = Array{Type}(undef, (length(base_kernels), 3))
+arr = zeros(Float64, (length(base_kernels), 3))
+
+@showprogress for (ind, (name, gp)) in enumerate(base_kernels)
+    kernel_types[ind, 1] = typeof(gp)
+    arr[ind, 1] = bench(gp)
+
+    naive_igp = Integrated(gp)
+    kernel_types[ind, 2] = typeof(naive_igp)
+    arr[ind, 2] = bench(naive_igp)
+
+    igp = IntegratedMaternGPs.integrate(gp; cache_size=0)
+    kernel_types[ind, 3] = typeof(igp)
+    arr[ind, 3] = bench(igp)
+end
+longest_name = maximum([length(name) for (name, _) in base_kernels])
+
+baseline = arr[1, 1]
+println(highlight("</> Done.\n"))
+
+LENGTH = longest_name + 2
+SPACER = join([" " for _ in 1:4])
+HLINE = join(["-" for _ in 1:50])
+
+println("Types: ")
+for ind in 1:length(base_kernels)
+    println(
+        kernel_types[ind, 1], SPACER, kernel_types[ind, 2], SPACER, kernel_types[ind, 3]
+    )
+end
+println("\n\n")
+
+println("Kernel evaluation benchmarks:")
+println(HLINE)
+println(
+    rpad("BASE KERNEL", LENGTH),
+    rpad("   K", 6),
+    SPACER,
+    rpad("Naive I", 6),
+    SPACER,
+    rpad("    I", 6),
+)
+println(HLINE)
+for (ind, (name, _)) in enumerate(base_kernels)
+    println(
+        rpad(name * ": ", LENGTH),
+        display(arr[ind, 1] / baseline),
+        SPACER,
+        display(arr[ind, 2] / baseline),
+        SPACER,
+        display(arr[ind, 3] / baseline),
+    )
+end
+println(HLINE)
+
 println("")
-
-naive_igp_gen = Integrated(gp_gen)
-naive_igp_cpe = Integrated(gp_cpe)
-igp_gen = IntegratedMaternGP(gp_gen; cache_size=0)
-igp_cpe = IntegratedCPEMaternGP(gp_cpe; cache_size=0)
-igp_cache = IntegratedCPEMaternGP(gp_cpe; cache_size=1000)
-
-evals_naive_gen = evals_per_second(() -> kernel(naive_igp_gen, 1.0, 2.0))
-evals_naive_cpe = evals_per_second(() -> kernel(naive_igp_cpe, 1.0, 2.0))
-evals_gen = evals_per_second(() -> kernel(igp_gen, 1.0, 2.0))
-evals_cpe = evals_per_second(() -> kernel(igp_cpe, 1.0, 2.0))
-evals_cache = evals_per_second(() -> kernel(igp_cache, 1.0, 2.0))
-
-println("Integrated kernel:")
-println("Naive General: $(round(evals_naive_gen, sigdigits=SIGDIGITS))/s")
-println("Naive CPE:     $(round(evals_naive_cpe, sigdigits=SIGDIGITS))/s")
-println("General:       $(round(evals_gen, sigdigits=SIGDIGITS))/s")
-println("CPE:           $(round(evals_cpe, sigdigits=SIGDIGITS))/s")
-println("Cached:        $(round(evals_cache, sigdigits=SIGDIGITS))/s")
+println(rpad("Baseline:", LENGTH), display(baseline))
 println("")
