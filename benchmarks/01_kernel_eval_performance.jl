@@ -2,6 +2,7 @@ using IntegratedMaternGPs
 using Polynomials
 using Crayons
 using ProgressMeter
+using BenchmarkTools
 
 highlight = Crayon(; foreground=:green)
 
@@ -17,7 +18,10 @@ end
 
 S = 1.0
 T = 2.0
-bench(gp::GPT) where {GPT<:AbstractGPKernel} = evals_per_second(() -> kernel(gp, S, T))
+function bench(gp::GPT) where {GPT<:AbstractGPKernel}
+    trial = @benchmark kernel(_gp, S, T) setup = (_gp = $gp) samples = 100_000 seconds = 10
+    return median(trial).time
+end#evals_per_second(() -> kernel(gp, S, T))
 
 SIGDIGITS = 3
 function display(x::T) where {T<:AbstractFloat}
@@ -30,7 +34,7 @@ function display(x::T) where {T<:AbstractFloat}
         digs[i] = Int(dig)
         ref = 10 * (ref - dig)
     end
-    return "$(digs[1]).$(join(digs[2:end]))e$(x_exp10)"
+    return "$(digs[1]).$(join(digs[2:end]))e$(x_exp10>=0 ? "+" : "")$(x_exp10)"
 end
 
 println(highlight("\n\nSTARTING BENCHMARK TEST\n"))
@@ -85,17 +89,21 @@ base_kernels = [
 kernel_types = Array{Type}(undef, (length(base_kernels), 3))
 arr = zeros(Float64, (length(base_kernels), 3))
 
-@showprogress for (ind, (name, gp)) in enumerate(base_kernels)
+prog = Progress(length(kernel_types))
+for (ind, (name, gp)) in enumerate(base_kernels)
     kernel_types[ind, 1] = typeof(gp)
     arr[ind, 1] = bench(gp)
+    next!(prog)
 
     naive_igp = Integrated(gp)
     kernel_types[ind, 2] = typeof(naive_igp)
     arr[ind, 2] = bench(naive_igp)
+    next!(prog)
 
     igp = IntegratedMaternGPs.integrate(gp; cache_size=0)
     kernel_types[ind, 3] = typeof(igp)
     arr[ind, 3] = bench(igp)
+    next!(prog)
 end
 longest_name = maximum([length(name) for (name, _) in base_kernels])
 
@@ -114,25 +122,36 @@ for ind in 1:length(base_kernels)
 end
 println("\n\n")
 
+min_times = minimum.(eachcol(arr))
+
 println("Kernel evaluation benchmarks:")
 println(HLINE)
 println(
     rpad("BASE KERNEL", LENGTH),
-    rpad("   K", 6),
+    rpad("   K", 7),
     SPACER,
-    rpad("Naive I", 6),
+    rpad("Naive I", 7),
     SPACER,
-    rpad("    I", 6),
+    rpad("   I", 7),
 )
 println(HLINE)
 for (ind, (name, _)) in enumerate(base_kernels)
+    text1 = display(arr[ind, 1] / baseline)
+    h1 = arr[ind, 1] == min_times[1]
+    text2 = display(arr[ind, 2] / baseline)
+    text3 = display(arr[ind, 3] / baseline)
+
+    h1 = arr[ind, 1] == min_times[1]
+    h2 = arr[ind, 2] == min_times[2]
+    h3 = arr[ind, 3] == min_times[3]
+
     println(
         rpad(name * ": ", LENGTH),
-        display(arr[ind, 1] / baseline),
+        h1 ? highlight(text1) : text1,
         SPACER,
-        display(arr[ind, 2] / baseline),
+        h2 ? highlight(text2) : text2,
         SPACER,
-        display(arr[ind, 3] / baseline),
+        h3 ? highlight(text3) : text3,
     )
 end
 println(HLINE)
