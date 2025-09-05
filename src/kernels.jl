@@ -4,6 +4,7 @@ using Struve: Struve
 import HypergeometricFunctions: pFq
 using LRUCache
 using Distributions
+using MatrixEquations
 
 export AbstractGPKernel,
     AbstractMaternGP,
@@ -16,6 +17,7 @@ export AbstractGPKernel,
     IntegratedRationalQuadraticGP,
     SquaredExponentialGP,
     IntegratedSquaredExponentialGP,
+    SSMGP,
     Mixture,
     kernel,
     integrate,
@@ -350,6 +352,22 @@ function _I1(gp::IntegratedSquaredExponentialGP{T}, t) where {T}
     return gp.σ2 * gp.ℓ^2 * (1 - exp(-t^2 / (2 * gp.ℓ^2)))
 end
 
+struct SSMGP{T} <: AbstractRadialKernel
+    ssm::SSM{T}
+    Σ::Matrix{T}
+end
+
+function SSMGP(ssm::SSM{T}) where {T}
+    Σ = lyapd(ssm.A, ssm.Q)
+    return SSMGP(ssm, Σ)
+end
+
+function kernel(gp::SSMGP{T}, s, t) where {T}
+    A, H = gp.ssm.A, gp.ssm.H
+    d = abs(s - t)
+    return H * A^d * gp.Σ * H'
+end
+
 function AbstractIntegratedMaternGP(gp::MaternGP; cache_size=1000)
     return IntegratedMaternGP(gp; cache_size=cache_size)
 end
@@ -376,7 +394,7 @@ function integrate(gp::SquaredExponentialGP; cache_size=1000)
 end
 function integrate(gp_mixture::Mixture{T}; cache_size=1000) where {T<:AbstractGPKernel}
     return Mixture{integrate(T)}([
-        integrate(gp; cache_size=cache_sie) for gp in gp_mixture.mixture
+        integrate(gp; cache_size=cache_size) for gp in gp_mixture.mixture
     ])
 end
 

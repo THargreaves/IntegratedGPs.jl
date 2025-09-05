@@ -53,40 +53,9 @@ function cpetomaternmixture(
     return Mixture(filter((gp::CPEMaternGP) -> !iszero(gp.σ2), matern_mixture))
 end
 
-struct SSM{T}
-    A::Matrix{T}
-    Q::Matrix{T}
-    H::Matrix{T}
-
-    function SSM(A::Matrix{T}, Q::Matrix{T}, H::Matrix{T}) where {T}
-        return (
-                   !(
-                       length(size(A)) == 2 && length(size(Q)) == 2 && length(size(H)) == 2
-                   ) && error(
-                       "All provided matrices must be 2-dimensional; provided A: $(size(A)) and Q: $(size(Q)) and H: $(size(H))",
-                   )
-               ) ||
-               (
-                   !(size(Q)[1] == size(Q)[2]) &&
-                   error("Q must be a square matrix; provided size is $(size(Q)).")
-               ) ||
-               (
-                   !(size(A)[2] == size(Q)[1]) && error(
-                       "A and Q must have compatible sizes; provided $(size(A)) and $(size(Q))",
-                   )
-               ) ||
-               (
-                   !(size(H)[2] == size(A)[1]) && error(
-                       "H and A must have compatible sizes; provided $(size(H)) and $(size(A))",
-                   )
-               ) ||
-               new{T}(A, Q, H)
-    end
-end
-
 # Evaluate the SSM Cov for N time steps. Since the Cov is known to have the form of a CPE, 
 # the exact coefficients can be evaluated by solving a system of linear equations.
-function fit_cov(ssm::SSM{T}) where {T<:AbstractFloat}
+function fit_cov(ssm::SSM{T}) where {T}
     size(ssm.H)[1] != 1 &&
         error("SSM needs to have one output for covariance matching to work.")
     eigen_vals = eigen(ssm.A).values

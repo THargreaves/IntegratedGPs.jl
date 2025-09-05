@@ -1,7 +1,7 @@
 using Polynomials, HCubature, LinearAlgebra, MatrixEquations
 import Base: isapprox
 
-export PolynomialExp, CompoundPolynomialExp, SSM
+export PolynomialExp, CompoundPolynomialExp
 export +, show, isequal, isapprox, zero
 export integrate, materntocpe, cpetomaternmixture, ssm2GPKernel
 

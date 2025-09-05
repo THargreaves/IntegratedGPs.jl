@@ -18,8 +18,12 @@ end
 
 S = 1.0
 T = 2.0
-function bench(gp::GPT) where {GPT<:AbstractGPKernel}
-    trial = @benchmark kernel(_gp, S, T) setup = (_gp = $gp) samples = 100_000 seconds = 10
+MAX_SAMPLES = 10_000#100_000
+MAX_SECONDS = 5#10
+
+function bench_gp(gp::GPT) where {GPT<:AbstractGPKernel}
+    trial = @benchmark kernel(_gp, S, T) setup = (_gp = $gp) samples = MAX_SAMPLES seconds =
+        MAX_SECONDS
     return median(trial).time
 end#evals_per_second(() -> kernel(gp, S, T))
 
@@ -73,10 +77,17 @@ cpe_ν, cpe_ρ, cpe_σ2 = 3.5, 2.4, 5.4
 se_ℓ, se_σ2 = 3.2, 0.4
 rq_α, rq_l, rq_σ2 = 5.7, 2.3, 3.1
 
+ssm_A = [0.9;;]
+ssm_Q = [1.0;;]
+ssm_H = [1.0;;]
+ssm = SSM(ssm_A, ssm_Q, ssm_H)
+
 base_kernels = [
     ("General Matern", MaternGP(3.7, 2.4, 5.4)),
     ("General CPE Matern", MaternGP(cpe_ν, cpe_ρ, cpe_σ2)),
     ("Pure CPE Matern", CPEMaternGP(cpe_ν, cpe_ρ, cpe_σ2)),
+    ("SSM GP", SSMGP(ssm)),
+    ("CPE SSM GP", ssm2GPKernel(ssm)),
     ("Squared Exponential", SquaredExponentialGP(se_ℓ, se_σ2)),
     ("Rational Quadratic", RationalQuadraticGP(rq_α, rq_l, rq_σ2)),
 ]
@@ -87,17 +98,22 @@ arr = zeros(Float64, (length(base_kernels), 3))
 prog = Progress(length(kernel_types))
 for (ind, (name, gp)) in enumerate(base_kernels)
     kernel_types[ind, 1] = typeof(gp)
-    arr[ind, 1] = bench(gp)
+    arr[ind, 1] = bench_gp(gp)
     next!(prog)
 
     naive_igp = Integrated(gp)
     kernel_types[ind, 2] = typeof(naive_igp)
-    arr[ind, 2] = bench(naive_igp)
+    arr[ind, 2] = bench_gp(naive_igp)
     next!(prog)
 
+    if gp isa SSMGP
+        arr[ind, 3] = 1E6
+        next!(prog)
+        continue
+    end
     igp = IntegratedMaternGPs.integrate(gp; cache_size=0)
     kernel_types[ind, 3] = typeof(igp)
-    arr[ind, 3] = bench(igp)
+    arr[ind, 3] = bench_gp(igp)
     next!(prog)
 end
 longest_name = maximum([length(name) for (name, _) in base_kernels])
@@ -111,9 +127,13 @@ HLINE = join(["-" for _ in 1:50])
 
 println("Types: ")
 for ind in 1:length(base_kernels)
-    println(
-        kernel_types[ind, 1], SPACER, kernel_types[ind, 2], SPACER, kernel_types[ind, 3]
-    )
+    if base_kernels[ind][2] isa SSMGP
+        println(kernel_types[ind, 1], SPACER, kernel_types[ind, 2])
+    else
+        println(
+            kernel_types[ind, 1], SPACER, kernel_types[ind, 2], SPACER, kernel_types[ind, 3]
+        )
+    end
 end
 println("\n\n")
 
