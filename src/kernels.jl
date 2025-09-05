@@ -3,6 +3,7 @@ import SpecialFunctions: gamma
 using Struve: Struve
 import HypergeometricFunctions: pFq
 using LRUCache
+using Distributions
 
 export AbstractGPKernel,
     AbstractMaternGP,
@@ -13,6 +14,8 @@ export AbstractGPKernel,
     IntegratedCPEMaternGP,
     RationalQuadraticGP,
     IntegratedRationalQuadraticGP,
+    SquaredExponentialGP,
+    IntegratedSquaredExponentialGP,
     Mixture,
     kernel,
     integrate,
@@ -312,6 +315,41 @@ function _I1(gp::IntegratedRationalQuadraticGP{T}, t) where {T}
     return σ2 * α * l^2 * (1 - (1 + t^2 / (2 * α * l^2))^(1 - α)) / (α - 1)
 end
 
+struct SquaredExponentialGP{T} <: AbstractRadialKernel
+    ℓ::T
+    σ2::T
+end
+
+function kernel(gp::SquaredExponentialGP, s, t)
+    ℓ, σ2 = gp.ℓ, gp.σ2
+
+    return σ2 * exp(-(s - t)^2 / (2 * ℓ^2))
+end
+
+struct IntegratedSquaredExponentialGP{T,DT<:AbstractDict{T,T}} <:
+       AbstractIntegratedRadialKernel
+    ℓ::T
+    σ2::T
+    # Caches for evaluations of I0 and I1
+    I0_cache::DT
+    I1_cache::DT
+end
+
+function IntegratedSquaredExponentialGP(
+    gp::SquaredExponentialGP{T}; cache_size=1000
+) where {T}
+    I0_cache = cache_size == 0 ? NullCache{T,T}() : LRU{T,T}(; maxsize=cache_size)
+    I1_cache = cache_size == 0 ? NullCache{T,T}() : LRU{T,T}(; maxsize=cache_size)
+    return IntegratedSquaredExponentialGP(gp.ℓ, gp.σ2, I0_cache, I1_cache)
+end
+
+function _I0(gp::IntegratedSquaredExponentialGP{T}, t) where {T}
+    return gp.σ2 * sqrt(2 * pi) * gp.ℓ * (cdf(Normal(0, 1), t / gp.ℓ) - 0.5)
+end
+function _I1(gp::IntegratedSquaredExponentialGP{T}, t) where {T}
+    return gp.σ2 * gp.ℓ^2 * (1 - exp(-t^2 / (2 * gp.ℓ^2)))
+end
+
 function AbstractIntegratedMaternGP(gp::MaternGP; cache_size=1000)
     return IntegratedMaternGP(gp; cache_size=cache_size)
 end
@@ -323,6 +361,7 @@ integrate(::Type{T}) where {T<:AbstractGPKernel} = Integrated{T}
 integrate(::Type{T}) where {T<:MaternGP} = IntegratedMaternGP
 integrate(::Type{T}) where {T<:CPEMaternGP} = IntegratedCPEMaternGP
 integrate(::Type{T}) where {T<:RationalQuadraticGP} = IntegratedRationalQuadraticGP
+integrate(::Type{T}) where {T<:SquaredExponentialGP} = IntegratedSquaredExponentialGP
 integrate(::Type{Mixture{T}}) where {T<:AbstractGPKernel} = IntegratedMixture{integrate(T)}
 
 integrate(gp::T; cache_size=1000) where {T<:AbstractGPKernel} = Integrated{T}(gp)
@@ -331,6 +370,9 @@ function integrate(gp::AbstractMaternGP; cache_size=1000)
 end
 function integrate(gp::RationalQuadraticGP; cache_size=1000)
     return IntegratedRationalQuadraticGP(gp; cache_size=cache_size)
+end
+function integrate(gp::SquaredExponentialGP; cache_size=1000)
+    return IntegratedSquaredExponentialGP(gp; cache_size=cache_size)
 end
 function integrate(gp_mixture::Mixture{T}; cache_size=1000) where {T<:AbstractGPKernel}
     return Mixture{integrate(T)}([

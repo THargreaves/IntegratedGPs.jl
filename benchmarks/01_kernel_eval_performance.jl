@@ -69,20 +69,15 @@ println("")
 
 println(highlight("<> Evaluating kernels..."))
 
-cpe_ν = 3.5
-cpe_ρ = 2.4
-cpe_σ2 = 5.4
-
-rq_α = 5.7
-rq_l = 2.3
-rq_σ2 = 3.1
-
-# TODO: include Squared Exponential
+cpe_ν, cpe_ρ, cpe_σ2 = 3.5, 2.4, 5.4
+se_ℓ, se_σ2 = 3.2, 0.4
+rq_α, rq_l, rq_σ2 = 5.7, 2.3, 3.1
 
 base_kernels = [
     ("General Matern", MaternGP(3.7, 2.4, 5.4)),
     ("General CPE Matern", MaternGP(cpe_ν, cpe_ρ, cpe_σ2)),
     ("Pure CPE Matern", CPEMaternGP(cpe_ν, cpe_ρ, cpe_σ2)),
+    ("Squared Exponential", SquaredExponentialGP(se_ℓ, se_σ2)),
     ("Rational Quadratic", RationalQuadraticGP(rq_α, rq_l, rq_σ2)),
 ]
 
