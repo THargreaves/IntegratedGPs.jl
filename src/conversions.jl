@@ -1,3 +1,5 @@
+export cpe_mixture_to_ssm
+
 materntocpe(gp::MaternGP) = materntocpe(gp.ν, gp.ρ, gp.σ2)
 materntocpe(gp::CPEMaternGP) = gp.cpe
 # In the specific case when ν = p + 0.5 (p ∈ Z), the Matern kernel can be evaluated exactly 
@@ -98,6 +100,61 @@ function fit_cov(ssm::SSM{T}) where {T}
     return sum(coefs .* basis)
 end
 
+function cpe_mixture_to_ssm(gp::Mixture{CPEMaternGP}, Ts::T=1.0) where {T}
+    N = sum(
+        sum([
+            [Polynomials.degree(poly) + 1 for poly in gp_component.cpe.value_lookup] for
+            gp_component in gp.mixture
+        ]),
+    )
+    poles = zeros(N)
+    i = 1
+    for gp_component in gp.mixture
+        for (beta, poly) in gp_component.cpe.polynomials
+            for _ in 0:Polynomials.degree(poly)
+                poles[i] = exp(-beta)
+                i += 1
+            end
+        end
+    end
+
+    ar_poly_coeffs = fromroots(poles).coeffs
+    A = zeros((N, N))
+    for i in 1:(N - 1)
+        A[i + 1, i] = 1
+    end
+    A[1, :] = -reverse(ar_poly_coeffs[1:N])
+    Q = zeros(T, (N, N))
+    Q[1, 1] = 1.0
+
+    v = [kernel(gp, 0.0, i) for i in 1:N]
+    Σ = lyapd(A, Q)
+    M = [A^i * Σ for i in 1:N]
+
+    E(vec) = sum([(only(vec' * M[i] * vec) - v[i])^2 for i in 1:N])
+    G(vec) = 4 * sum([(only(vec' * M[i] * vec) - v[i]) * M[i] * vec for i in 1:N])
+    function H(vec)
+        return 4 * sum([
+            ((only(vec' * M[i] * vec) - v[i]) * M[i] + 2 * M[i] * vec * vec' * M[i]') for
+            i in 1:N
+        ])
+    end
+
+    vec0 = ones((N, 1)) * 1E1
+
+    vec = vec0
+    cnt = 0
+    while E(vec) > 1E-12 && cnt < 100_000
+        vec = vec - inv(H(vec)) * G(vec)
+        cnt += 1
+    end
+
+    H = zeros((1, N))
+    Q[1, 1] *= vec[1]^2
+    H[1, :] = vec' / vec[1]
+    return SSM(A, Q, H)
+end
+
 # Since the SSM Cov is a CPE, and a CPE is a Matern Mixture, 
 # the SSM Mixture is a Matern Mixture
-ssm2GPKernel(ssm::SSM) = cpetomaternmixture(fit_cov(ssm))
+ssm2GPKernel(ssm::SSM{T}) where {T} = cpetomaternmixture(fit_cov(ssm))

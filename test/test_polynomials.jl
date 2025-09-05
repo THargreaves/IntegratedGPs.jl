@@ -111,3 +111,46 @@ end
 
     # TODO: Implement the case corresponding to complex Matern arguments
 end
+
+@testitem "Matern Mixture to SSM" begin
+    using IntegratedMaternGPs
+    using Polynomials
+    using MatrixEquations
+
+    import Base: isapprox
+
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-1), 0:1E-8:5)
+
+    pole_poly = fromroots([0.4, 0.5, 0.6])
+    zero_poly = fromroots([0.7, 0.55])
+    N = degree(pole_poly)
+
+    σ2 = 5.4
+
+    A = zeros(N, N)
+    for i in 1:(N - 1)
+        A[i + 1, i] = 1
+    end
+    A[1, 1:N] = -reverse(pole_poly[0:(N - 1)])
+    Q = zeros((N, N))
+    Q[1, 1] = σ2
+    H = zeros((1, N))
+    H[1, 1:N] = reverse(zero_poly.coeffs)
+
+    ssm = SSM(A, Q, H)
+    gp = ssm2GPKernel(ssm)
+
+    conj_ssm = cpe_mixture_to_ssm(gp)
+
+    conj_Σ = lyapd(conj_ssm.A, conj_ssm.Q)
+
+    @test functions_match(
+        t -> kernel(gp, 0.0, t), t -> only(conj_ssm.H * conj_ssm.A^t * conj_Σ * conj_ssm.H')
+    )
+
+    # Check that the kernels match.
+    # NOTE: This is different from the SSMs having the same form.
+    # It's a bit strange, because I would expect the two SSMs to be identical 
+    # given the ARMA structure being imposed on them.
+    # I suspect the ARMA->CPE conversion is less accurate than is desirable.
+end

@@ -77,6 +77,7 @@ cpe_ν, cpe_ρ, cpe_σ2 = 3.5, 2.4, 5.4
 se_ℓ, se_σ2 = 3.2, 0.4
 rq_α, rq_l, rq_σ2 = 5.7, 2.3, 3.1
 
+# TODO: Use a 4th order model
 ssm_A = [0.9;;]
 ssm_Q = [1.0;;]
 ssm_H = [1.0;;]
@@ -107,7 +108,7 @@ for (ind, (name, gp)) in enumerate(base_kernels)
     next!(prog)
 
     if gp isa SSMGP
-        arr[ind, 3] = 1E6
+        arr[ind, 3] = 1E12
         next!(prog)
         continue
     end

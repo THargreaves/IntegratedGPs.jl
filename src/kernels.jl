@@ -359,7 +359,7 @@ end
 
 function SSMGP(ssm::SSM{T}) where {T}
     Σ = lyapd(ssm.A, ssm.Q)
-    return SSMGP(ssm, Σ)
+    return SSMGP{T}(ssm, Σ)
 end
 
 function kernel(gp::SSMGP{T}, s, t) where {T}
