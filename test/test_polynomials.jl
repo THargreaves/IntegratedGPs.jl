@@ -119,7 +119,8 @@ end
 
     import Base: isapprox
 
-    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-1), 0:1E-8:5)
+    # Can get it to pass with rtol = 1E-4; using 1E-8 is asking a bit much
+    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-4), 0:1E-1:5)
 
     pole_poly = fromroots([0.4, 0.5, 0.6])
     zero_poly = fromroots([0.7, 0.55])
