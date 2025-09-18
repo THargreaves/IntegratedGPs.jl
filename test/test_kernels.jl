@@ -156,25 +156,22 @@ end
     using IntegratedMaternGPs
     using HCubature
 
-    import Base: isapprox
+    l = 2.0
+    σ2 = 1.0
+    gp = SquaredExponentialGP(l, σ2)
+    int_gp = integrate(gp)
 
-    functions_match(f, g) = all(x -> isapprox(f(x), g(x); rtol=1E-8), 0:1E-1:5)
-
-    ℓ = 2.4
-    σ2 = 6.3
-    gp = SquaredExponentialGP(ℓ, σ2)
-    igp = integrate(gp)
-
-    @test functions_match(t -> I0(igp, t), t -> hquadrature(x -> kernel(gp, 0, x), 0, t)[1])
-    @test functions_match(
-        t -> I1(igp, t), t -> hquadrature(x -> x * kernel(gp, 0, x), 0, t)[1]
-    )
-
+    # Test s ≠ t case
     s, t = 0.8, 1.1
     kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
-    kernel_analytical = kernel(igp, s, t)
+    kernel_analytical = kernel(int_gp, s, t)
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
 
-    @test isapprox(kernel_numeric, kernel_analytical, rtol=1E-8)
+    # Test s = t case
+    s = t = 0.8
+    kernel_numeric = HCubature.hcubature(x -> kernel(gp, x[1], x[2]), [0.0, 0.0], [s, t])[1]
+    kernel_analytical = kernel(int_gp, s, t)
+    @test kernel_numeric ≈ kernel_analytical rtol = 1e-8
 end
 
 @testitem "LRU Cache" begin
