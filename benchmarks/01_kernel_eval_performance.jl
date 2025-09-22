@@ -18,8 +18,8 @@ end
 
 S = 1.0
 T = 2.0
-MAX_SAMPLES = 10_000#100_000
-MAX_SECONDS = 5#10
+MAX_SAMPLES = 100_000
+MAX_SECONDS = 10
 
 function bench_gp(gp::GPT) where {GPT<:AbstractGPKernel}
     trial = @benchmark kernel(_gp, S, T) setup = (_gp = $gp) samples = MAX_SAMPLES seconds =
