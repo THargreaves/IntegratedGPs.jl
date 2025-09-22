@@ -1,4 +1,4 @@
-export SSM
+export SSM, show
 
 struct SSM{T<:AbstractFloat}
     A::Matrix{T}
@@ -29,4 +29,9 @@ struct SSM{T<:AbstractFloat}
                ) ||
                new{T}(A, Q, H)
     end
+end
+
+function Base.show(io::IO, ssm::SSM)
+    str = "A: $(ssm.A)\nQ: $(ssm.Q)\nH: $(ssm.H)"
+    return print(io, str)
 end

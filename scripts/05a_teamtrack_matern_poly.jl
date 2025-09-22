@@ -2,6 +2,7 @@ using CSV
 using DataFrames
 using Plots
 using Random
+using Statistics
 
 rng = MersenneTwister(1234)
 d = 20
@@ -54,7 +55,7 @@ thinning_factor = 30
 # σV² = 0.25929437974046676
 # Validation MSE (CV):   0.05100603945404705
 
-path = "teamtrack/teamtrack/soccer_top/train/annotations"
+path = joinpath(split("teamtrack/teamtrack/soccer_top/train/annotations", "/"))
 prefix = "D_20220220_1"
 
 data_set = 0
@@ -477,7 +478,7 @@ compute_filtering_ll(ν, ρ, σ2, σϵ, τ, all_ys[1], d)
 
 # Grid search over parameters
 # νs = range(0.5, 10.5; step=1.0)  # half-integers
-νs = range(0.5, 6.0; length=10)
+νs = sort(unique(vcat(range(0.5, 6.0; length=10), range(0.5, 5.5; step=1.0))))
 # νs = [Inf]
 ρs = 10 .^ range(-1, 0.5; length=10)
 σ2s = 10 .^ range(-4, 0; length=10)
@@ -550,6 +551,38 @@ best_σ2 = σ2s[ind[3]]
 # Is optimal value on the edge of the grid?
 is_interior = all(ind.I .> 1) && all(ind.I .< (size(grid_lls)))
 println("Is interior: $is_interior")
+
+# Evaluate the best half-integer case for SSM fitting
+println([ind for ind in flatten_parameter_indices])
+println([isinteger(νs[ind[1]] - 0.5) ? ind : false for ind in flatten_parameter_indices],)
+half_int_inds = filter(
+    ind -> ind != false,
+    [isinteger(νs[ind[1]] - 0.5) ? ind : false for ind in flatten_parameter_indices],
+)
+best_half_int_ll = -Inf
+best_half_int_ind = 0
+for ind in half_int_inds
+    global best_half_int_ind, best_half_int_ll
+    val = grid_lls[ind...]
+    println("$ind gives $val")
+    if val > best_half_int_ll
+        best_half_int_ll = val
+        best_half_int_ind = ind
+    end
+end
+
+best_half_int_ν = νs[best_half_int_ind[1]]
+best_half_int_ρ = ρs[best_half_int_ind[2]]
+best_half_int_σ2 = σ2s[best_half_int_ind[3]]
+println(
+    "Best half-integer value: $best_half_int_ll at ($best_half_int_ν, $best_half_int_ρ, $best_half_int_σ2)",
+)
+
+model = Mixture{CPEMaternGP}([
+    CPEMaternGP(best_half_int_ν, best_half_int_ρ, best_half_int_σ2)
+])
+ssm = cpe_mixture_to_ssm(model, 1.0)
+println("Constructed SSM:\n$ssm")
 
 # # Evaluate at best ν
 # h1 = heatmap(

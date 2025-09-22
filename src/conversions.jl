@@ -148,6 +148,7 @@ function cpe_mixture_to_ssm(gp::Mixture{CPEMaternGP}, Ts::T=1.0) where {T}
         vec = vec - inv(H(vec)) * G(vec)
         cnt += 1
     end
+    println("SSM construction error: $(E(vec)) in $cnt steps")
 
     H = zeros((1, N))
     Q[1, 1] *= vec[1]^2
