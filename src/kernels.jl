@@ -302,7 +302,7 @@ function _I0(gp::IntegratedRationalQuadraticGP{T}, t) where {T}
     # Special case
     t == 0 && return T(0)
 
-    return σ2 * t * pFq((T(0.5), α), (T(1.5),), -t^2 / (2 * α * l^2))
+    return σ2 * t * pFq((α, T(0.5)), (T(1.5),), -t^2 / (2 * α * l^2))
 end
 
 function _I1(gp::IntegratedRationalQuadraticGP{T}, t) where {T}
