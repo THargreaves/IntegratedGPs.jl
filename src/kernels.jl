@@ -314,7 +314,7 @@ function _I1(gp::IntegratedRationalQuadraticGP{T}, t) where {T}
         return σ2 * l^2 * log(1 + t^2 / (2 * l^2))
     end
 
-    return σ2 * α * l^2 * (1 - (1 + t^2 / (2 * α * l^2))^(1 - α)) / (α - 1)
+    return σ2 * α * l^2 * ((1 + t^2 / (2 * α * l^2))^(1 - α) - 1) / (1 - α)
 end
 
 struct SquaredExponentialGP{T} <: AbstractGPKernel
