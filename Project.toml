@@ -1,7 +1,7 @@
-name = "IntegratedMaternGPs"
+name = "IntegratedGPs"
 uuid = "91454fe4-b873-40e4-a420-6b0a4e03942a"
-authors = ["Tim Hargreaves", "Ralph McDougall"]
 version = "1.0.0-DEV"
+authors = ["Tim Hargreaves", "Ralph McDougall"]
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
