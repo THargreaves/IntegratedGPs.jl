@@ -7,7 +7,7 @@ covariance matrix since knowledge of x1 does not help us predict further states 
 centered case; neither can we perform inference on a fixed state.
 """
 
-using IntegratedMaternGPs
+using IntegratedGPs
 
 using Distributions
 using KalmanFilters

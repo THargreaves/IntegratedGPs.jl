@@ -1,6 +1,6 @@
 """An implementation of the first Markovian approximation with prior for x0."""
 
-using IntegratedMaternGPs
+using IntegratedGPs
 
 using Distributions
 using KalmanFilters

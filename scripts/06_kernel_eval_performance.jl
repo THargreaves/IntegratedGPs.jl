@@ -1,4 +1,4 @@
-using IntegratedMaternGPs
+using IntegratedGPs
 using Polynomials
 using Crayons
 using ProgressMeter
@@ -112,7 +112,7 @@ for (ind, (name, gp)) in enumerate(base_kernels)
         next!(prog)
         continue
     end
-    igp = IntegratedMaternGPs.integrate(gp; cache_size=0)
+    igp = IntegratedGPs.integrate(gp; cache_size=0)
     kernel_types[ind, 3] = typeof(igp)
     arr[ind, 3] = bench_gp(igp)
     next!(prog)

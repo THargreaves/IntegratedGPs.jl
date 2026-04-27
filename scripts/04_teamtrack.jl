@@ -140,7 +140,7 @@ p2 = plot(
 scatter!(p2, ts, ys; label="Observations", color=:red, ms=4, alpha=0.5)
 display(p2)
 
-using IntegratedMaternGPs
+using IntegratedGPs
 using Distributions
 using LinearAlgebra
 using ProgressMeter
