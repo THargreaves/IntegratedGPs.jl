@@ -1,5 +1,5 @@
 @testitem "Cholesky Update" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StaticArrays
 
@@ -38,7 +38,7 @@
 end
 
 @testitem "Shifting Transition Mean Update" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StableRNGs
 
@@ -65,7 +65,7 @@ end
 end
 
 @testitem "Shifting Transition Covariance Update" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StableRNGs
 
@@ -95,7 +95,7 @@ end
 end
 
 @testitem "Expanding Transition Mean Update" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StableRNGs
 
@@ -123,7 +123,7 @@ end
 end
 
 @testitem "Expanding Transition Covariance Update" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StableRNGs
 
@@ -153,7 +153,7 @@ end
 end
 
 @testitem "Shifting Offset Transition Mean Update" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StableRNGs
 
@@ -182,7 +182,7 @@ end
 end
 
 @testitem "Shifting Offset Transition Covariance Update" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StableRNGs
 
@@ -214,7 +214,7 @@ end
 end
 
 @testitem "Expanding Offset Transition Mean Update" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StableRNGs
 
@@ -244,7 +244,7 @@ end
 end
 
 @testitem "Expanding Offset Transition Covariance Update" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StableRNGs
 
@@ -276,7 +276,7 @@ end
 end
 
 @testitem "Expanding Markovian Transition Test" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StableRNGs
 
@@ -334,7 +334,7 @@ end
 end
 
 @testitem "Shifting Markovian Transition Test" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LinearAlgebra
     using StableRNGs
 

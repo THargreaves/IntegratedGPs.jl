@@ -1,5 +1,5 @@
 @testitem "Basic CPE operations" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using Polynomials
 
     import Base: isapprox
@@ -44,7 +44,7 @@
 end
 
 @testitem "CPE Integration" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using HCubature
 
     import Base: isapprox
@@ -70,7 +70,7 @@ end
 end
 
 @testitem "SSM to Matern Mixture" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
 
     import Base: isapprox
     using LinearAlgebra, MatrixEquations
@@ -113,7 +113,7 @@ end
 end
 
 @testitem "Matern Mixture to SSM" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using Polynomials
     using MatrixEquations
 

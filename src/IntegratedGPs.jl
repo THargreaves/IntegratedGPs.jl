@@ -1,4 +1,4 @@
-module IntegratedMaternGPs
+module IntegratedGPs
 
 using LinearAlgebra
 
@@ -8,4 +8,4 @@ include("kernels.jl")
 include("linalg.jl")
 include("conversions.jl")
 
-end # module IntegratedMaternGPs
+end # module IntegratedGPs

@@ -1,5 +1,5 @@
 @testitem "Matern kernel case distinction" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
 
     import Base: isapprox
 
@@ -27,7 +27,7 @@
 end
 
 @testitem "Matern kernel I0 & I1 verification" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using HCubature
 
     import Base: isapprox
@@ -51,7 +51,7 @@ end
 end
 
 @testitem "Stable SturveL-BesselK product" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using ArbNumerics
     using Struve
 
@@ -66,7 +66,7 @@ end
 
     # Check for in both order cases
     for (νs, νb) in [(ν, ν - 1), (ν - 1, ν)]
-        bessel_struve_stable = IntegratedMaternGPs._besselk_struvel_large_arg(νb, νs, x)
+        bessel_struve_stable = IntegratedGPs._besselk_struvel_large_arg(νb, νs, x)
         struvel_arb = Struve.struvel_power_series(BigFloat(νs, prec), BigFloat(x, prec))
         besselk_arb = ArbNumerics.besselk(ArbReal(νb), ArbReal(x))
         bessel_struve_arb = besselk_arb * ArbReal(struvel_arb)
@@ -75,7 +75,7 @@ end
 end
 
 @testitem "Integrated Matern Kernel" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using HCubature
 
     ν = 1.5
@@ -98,7 +98,7 @@ end
 end
 
 @testitem "Integrated CPE Matern Kernel" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using HCubature
 
     ν = 2.5
@@ -121,7 +121,7 @@ end
 end
 
 @testitem "Integrated Rational Quadratic Kernel" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using HCubature
 
     α = 1.3
@@ -153,7 +153,7 @@ end
 end
 
 @testitem "Integrated Squared Exponential Kernel" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using HCubature
 
     l = 2.0
@@ -175,7 +175,7 @@ end
 end
 
 @testitem "LRU Cache" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
     using LRUCache
 
     ν = 1.5
@@ -192,7 +192,7 @@ end
 end
 
 @testitem "Matern to CPE" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
 
     import Base: isapprox
 
@@ -226,7 +226,7 @@ end
 end
 
 @testitem "CPE to Matern Mixture" begin
-    using IntegratedMaternGPs
+    using IntegratedGPs
 
     import Base: isapprox
 
