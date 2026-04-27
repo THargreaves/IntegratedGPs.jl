@@ -267,9 +267,9 @@ scatter!(
     alpha=0.5,
 )
 display(p2)
-savefig(p2, "trajectory_sample.svg")
+savefig(p2, "scripts/figs/trajectory_sample.pdf")
 
-using IntegratedMaternGPs
+using IntegratedGPs
 using Distributions
 using LinearAlgebra
 using ProgressMeter
@@ -639,7 +639,7 @@ m1 = plot(
 )
 # Add vertical line at best ν
 vline!(m1, [best_ν]; linestyle=:dash, color=:black, label="ML Estimate", lw=2)
-savefig(m1, "nu_profile.svg")
+savefig(m1, "scripts/figs/nu_profile.pdf")
 
 # m2 = plot(
 #     ρs,
