@@ -111,23 +111,6 @@ for (i, (team, player)) in enumerate([
     println(length(all_xs_true_raw), " team=$team, player=$player")
 end
 
-# Thin to one observation every 2 seconds (60 frames)
-# xs_true = xs_true[1:15:end]
-all_xs_true = [xs_true[1:thinning_factor:end] for xs_true in all_xs_true_raw]
-K = length(all_xs_true[1])
-τ = thinning_factor * 1 / 30
-ts = collect(range(0; step=τ, length=K))
-
-# Normalise to zero mean, unit variance
-# μ_x = mean(xs_true)
-# σ_x = std(xs_true)
-# xs_true = (xs_true .- μ_x) ./ σ_x
-for i in 1:length(all_xs_true)
-    μ_x = mean(all_xs_true[i])
-    σ_x = std(all_xs_true[i])
-    all_xs_true[i] = (all_xs_true[i] .- μ_x) ./ σ_x
-end
-
 # USING TEAM 0, PLAYER 6
 
 # Normalise truth
@@ -138,27 +121,6 @@ xss = (xss .- mean(xss)) ./ std(xss)
 
 # Plot truth and observations
 num_points = 60
-p2 = plot(
-    (0:(num_points * thinning_factor - 1)) / 30,
-    xss[1:(num_points * thinning_factor)];
-    xlabel="Time (s)",
-    ylabel="Normalised Horizontal Position",
-    label="",#"Full Ground Truth",
-    color=:blue,
-    grid=false,
-    lw=2,
-)
-scatter!(
-    p2,
-    ts[1:num_points],
-    all_xs_true[blue_player][1:num_points];
-    label="",#"Thinned Ground Truth",
-    color=:blue,
-    ms=3,
-    alpha=1,
-)
-
-savefig(p2, "scripts/figs/trajectory_sample.pdf")
 
 # Open the video file
 vid = VideoIO.open("teamtrack/teamtrack/soccer_top/train/videos/D_20220220_1_0030_0060.mp4")
