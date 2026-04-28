@@ -380,8 +380,12 @@ function kernel(gp::SSMGP{T}, s, t) where {T}
     return H * A^d * gp.Σ * H'
 end
 
-AbstractIntegratedMaternGP(gp::MaternGP) = IntegratedMaternGP(gp)
-AbstractIntegratedMaternGP(gp::CPEMaternGP) = IntegratedCPEMaternGP(gp)
+function AbstractIntegratedMaternGP(gp::MaternGP; cache_size=1000)
+    return IntegratedMaternGP(gp; cache_size=cache_size)
+end
+function AbstractIntegratedMaternGP(gp::CPEMaternGP; cache_size=1000)
+    return IntegratedCPEMaternGP(gp; cache_size=cache_size)
+end
 
 integrate(::Type{T}) where {T<:AbstractGPKernel} = Integrated{T}
 integrate(::Type{T}) where {T<:MaternGP} = IntegratedMaternGP
@@ -390,12 +394,20 @@ integrate(::Type{T}) where {T<:RationalQuadraticGP} = IntegratedRationalQuadrati
 integrate(::Type{T}) where {T<:SquaredExponentialGP} = IntegratedSquaredExponentialGP
 integrate(::Type{Mixture{T}}) where {T<:AbstractGPKernel} = IntegratedMixture{integrate(T)}
 
-integrate(gp::T) where {T<:AbstractGPKernel} = Integrated{T}(gp)
-integrate(gp::AbstractMaternGP) = AbstractIntegratedMaternGP(gp)
-integrate(gp::RationalQuadraticGP) = IntegratedRationalQuadraticGP(gp)
-integrate(gp::SquaredExponentialGP) = IntegratedSquaredExponentialGP(gp)
-function integrate(gp_mixture::Mixture{T}) where {T<:AbstractGPKernel}
-    return Mixture{integrate(T)}([integrate(gp) for gp in gp_mixture.mixture])
+integrate(gp::T; cache_size=1000) where {T<:AbstractGPKernel} = Integrated{T}(gp)
+function integrate(gp::AbstractMaternGP; cache_size=1000)
+    return AbstractIntegratedMaternGP(gp; cache_size=cache_size)
+end
+function integrate(gp::RationalQuadraticGP; cache_size=1000)
+    return IntegratedRationalQuadraticGP(gp; cache_size=cache_size)
+end
+function integrate(gp::SquaredExponentialGP; cache_size=1000)
+    return IntegratedSquaredExponentialGP(gp; cache_size=cache_size)
+end
+function integrate(gp_mixture::Mixture{T}; cache_size=1000) where {T<:AbstractGPKernel}
+    return Mixture{integrate(T)}([
+        integrate(gp; cache_size=cache_size) for gp in gp_mixture.mixture
+    ])
 end
 
 isintegrated(gp::T) where {T<:AbstractGPKernel} = typeof(gp) <: AbstractIntegratedKernel
