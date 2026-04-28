@@ -19,7 +19,10 @@ or by cloning the repo onto your file system (see Reproducibility).
 ## Usage 
 
 Example Julia scripts can be found in [scripts/](scripts/).
-TODO
+A minimal example is shown below:
+```julia
+
+```
 
 ## Referencing
 
@@ -29,7 +32,7 @@ Please cite the following paper if you use this library:
 
 ## Reproducibility
 
-The results from the paper listed above can be reproduced by running the file [scripts/ojsp.jl](scripts/ojsp.jl) with the figures being produced in [scripts/figs/](scripts/figs/).
+The results from the paper listed above can be reproduced by running the file [scripts/ojsp.jl](scripts/ojsp.jl). This script will download the multi-object tracking dataset: [TeamTrack](https://www.kaggle.com/datasets/atomscott/teamtrack) and run all analysis scripts used in the paper. The figures will be produced in [scripts/figs/](scripts/figs/).
 
 A clean reproducibility test can be performed by running the following instructions in the terminal:
 ```bash
