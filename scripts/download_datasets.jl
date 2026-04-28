@@ -80,8 +80,8 @@ for (ind, f) in enumerate(filtered_files)
     out_path = f.name
     dir = dirname(out_path)
     split_dir = splitpath(dir)
-    mkpath(dir)  # create parent directories if they don't exist
-    if !endswith(f.name, "/")  # skip directory entries
+    mkpath(dir)
+    if !endswith(f.name, "/")
         write(out_path, read(f))
     end
 
