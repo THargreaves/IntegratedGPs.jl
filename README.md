@@ -32,7 +32,7 @@ The results from the paper listed above can be reproduced by running the file `s
 
 A clean reproducibility test can be performed by running the following instructions in the terminal:
 ```bash
-Documents> git clone git@github.com:THargreaves/IntegratedGPs.jl.git
+Documents> git clone https://github.com/THargreaves/IntegratedGPs.jl.git
 Documents> cd IntegratedGPs.jl
 Documents/IntegratedGPs.jl> julia
 ```
