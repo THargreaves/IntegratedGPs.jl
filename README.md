@@ -51,6 +51,9 @@ Please cite the following paper if you use this library:
 
 The results from the paper listed above can be reproduced by running the file [scripts/ojsp.jl](scripts/ojsp.jl). This script will download the multi-object tracking dataset: [TeamTrack](https://www.kaggle.com/datasets/atomscott/teamtrack) and run all analysis scripts used in the paper. The figures will be produced in [scripts/figs/](scripts/figs/).
 
+The most significant test is performed by tracking football player trajectories in the TeamTrack dataset. It is shown that the Matérn kernel is effective for highly agile trajectories:
+![Selected trajectories](/scripts/figs/sample_overlay.png "Selected trajectories")
+
 A clean reproducibility test can be performed by running the following instructions in the terminal:
 ```bash
 Documents> git clone https://github.com/THargreaves/IntegratedGPs.jl.git
