@@ -1,3 +1,5 @@
+module SCRIPT_06
+
 using IntegratedGPs
 using Polynomials
 using Crayons
@@ -175,3 +177,5 @@ println(HLINE)
 println("")
 println(rpad("Baseline:", LENGTH), display(baseline))
 println("")
+
+end

@@ -81,7 +81,7 @@ for (ind, f) in enumerate(filtered_files)
     dir = dirname(out_path)
     split_dir = splitpath(dir)
     mkpath(dir)
-    if !endswith(f.name, "/")
+    if !endswith(f.name, "/") && !isfile(out_path)
         write(out_path, read(f))
     end
 

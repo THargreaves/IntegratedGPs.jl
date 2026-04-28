@@ -1,3 +1,5 @@
+module SCRIPT_01a
+
 using LinearAlgebra
 using StaticArrays
 using Plots
@@ -39,3 +41,5 @@ plot(
     yscale=:log10,
     ylims=(0.1, 100),
 )
+
+end

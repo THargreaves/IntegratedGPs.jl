@@ -1,3 +1,5 @@
+module SCRIPT_04
+
 using CSV
 using DataFrames
 using Plots
@@ -409,3 +411,5 @@ _, μs_val, σ2s_val = compute_filtering_ll(best_ν, best_ρ, best_σ2, σϵ, 0.
 mse_val = mean((μs_val .- xs_true_val) .^ 2)
 println("Validation MSE:   $mse_val")
 println("Noise: $(σϵ^2)")
+
+end

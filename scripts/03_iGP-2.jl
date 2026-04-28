@@ -1,3 +1,5 @@
+module SCRIPT_03
+
 """An implementation of the first Markovian approximation with prior for x0."""
 
 using IntegratedGPs
@@ -112,7 +114,7 @@ function simulate(
 end
 
 # Simulate at higher resolution
-xs_true, ys = simulate(rng, gp, τ / thin, K * thin, x1_prior, σϵ, d * thin);
+xs_true, ys = simulate(rng, gp, τ / thin, K * thin, x1_prior, σϵ, d * thin)
 # Thin measurements
 ys = ys[1:thin:end]
 
@@ -275,3 +277,5 @@ plot!(
     fillalpha=0.2,
 )
 display(p)
+
+end

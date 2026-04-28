@@ -1,3 +1,5 @@
+module SCRIPT_01
+
 """
 An implementation of the first Markovian approximation with no offset of the trajectory.
 
@@ -348,3 +350,5 @@ display(p)
 #     fillalpha=0.2,
 # )
 # display(p)
+
+end

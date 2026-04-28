@@ -1,3 +1,5 @@
+module SCRIPT_02
+
 """An implementation of the first Markovian approximation with prior for x0."""
 
 using IntegratedGPs
@@ -308,3 +310,5 @@ plot!(
     fillalpha=0.2,
 )
 display(p)
+
+end

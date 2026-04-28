@@ -1,3 +1,5 @@
+module SCRIPT_05b
+
 using CSV
 using DataFrames
 using Plots
@@ -235,3 +237,5 @@ plot!(
 )
 
 savefig(p3, "scripts/figs/sample_overlay.pdf")
+
+end

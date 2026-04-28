@@ -1,3 +1,5 @@
+module SCRIPT_05a
+
 using CSV
 using DataFrames
 using Plots
@@ -1169,3 +1171,5 @@ for (i, xs_true_val) in enumerate(all_xs_true_val)
 end
 one_step_mse_val_cv = mean(one_step_mses_val_cv)
 println("Validation One-step ahead MSE (CV):   $one_step_mse_val_cv")
+
+end
