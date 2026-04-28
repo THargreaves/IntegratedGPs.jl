@@ -3,7 +3,7 @@
 [![Build Status](https://github.com/THargreaves/IntegratedGPs.jl/actions/workflows/CI.yml/badge.svg?branch=master)](https://github.com/THargreaves/IntegratedGPs.jl/actions/workflows/CI.yml?query=branch%3Amaster)
 
 
-We provide IntegratedGPs.jl, a library for performing inference with Integrated Gaussian Processes.
+We provide `IntegratedGPs.jl`, a library for performing inference with Integrated Gaussian Processes.
 An "integrated GP" is a Gaussian Process which is the integral of another GP.
 This library provides functions for evaluating the kernel of the integrated GP in terms of the base GP.
 In particular, we provide closed-form analytic integrated kernels for the Matérn, Squared Exponential, and Rational Quadratic kernels.
