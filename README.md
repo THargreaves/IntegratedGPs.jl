@@ -25,18 +25,19 @@ using IntegratedGPs
 using LinearAlgebra
 using Plots
 
-ν = 1.5
-ρ = 0.8
-σk = 1.2
-gp = constructmatern(ν, ρ, σk^2)
-igp = integrate(gp)
+ν = 1.5     # Matern smoothness parameter
+ρ = 0.8     # Lengthscale
+σk = 1.2    # Process standard deviation
+
+gp = constructmatern(ν, ρ, σk^2)    # Construct a Matern GP with appropriate optimisations for the given ν
+igp = integrate(gp)                 # Integrate the GP efficiently
 
 
 N = 100
-K = [kernel(igp, float(i), float(j)) for i in 1:N, j in 1:N]
+K = [kernel(igp, float(i), float(j)) for i in 1:N, j in 1:N] # Construct a covariance matrix
 K = 0.5 * (K + K')
 
-proc = cholesky(K).L * randn(N)
+proc = cholesky(K).L * randn(N)     # Draw an iGP sample
 
 plot(proc)
 ```
