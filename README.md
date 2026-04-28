@@ -21,7 +21,24 @@ or by cloning the repo onto your file system (see Reproducibility).
 Example Julia scripts can be found in [scripts/](scripts/).
 A minimal example is shown below:
 ```julia
+using IntegratedGPs
+using LinearAlgebra
+using Plots
 
+ν = 1.5
+ρ = 0.8
+σk = 1.2
+gp = constructmatern(ν, ρ, σk^2)
+igp = integrate(gp)
+
+
+N = 100
+K = [kernel(igp, float(i), float(j)) for i in 1:N, j in 1:N]
+K = 0.5 * (K + K')
+
+proc = cholesky(K).L * randn(N)
+
+plot(proc)
 ```
 
 ## Referencing
