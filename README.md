@@ -29,7 +29,7 @@ using Plots
 ρ = 0.8     # Lengthscale
 σk = 1.2    # Process standard deviation
 
-gp = constructmatern(ν, ρ, σk^2)    # Construct a Matern GP with appropriate optimisations for the given ν
+gp = constructmatern(ν, ρ, σk^2)    # Construct a Matern GP with optimisations for the given ν
 igp = integrate(gp)                 # Integrate the GP efficiently
 
 
