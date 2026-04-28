@@ -17,3 +17,16 @@ Please cite the following paper if you use this library:
 ## Reproducibility
 
 The results from the paper listed above can be reproduced by running the file `scripts/ojsp.jl` with the figures being produced in `scripts/figs/`.
+
+This can be done in the terminal through:
+```bash
+IntegratedGPs.jl> julia
+```
+```julia
+(@v1.12) pkg> activate IntegratedGPs
+(IntegratedGPs) pkg> instantiate
+(IntegratedGPs) pkg> activate scripts
+(scripts) pkg> instantiate
+julia> include("scripts/ojsp.jl")
+```
+Note that the package mode is entered by pressing the `]` key, and the backspace returning to the standard REPL.
