@@ -1,5 +1,3 @@
-module SCRIPT_03
-
 """An implementation of the first Markovian approximation with prior for x0."""
 
 using IntegratedGPs
@@ -16,13 +14,15 @@ using Random
 ####################
 
 # Prior
-x1_prior = Normal(5.0, 0.5)
+x1_prior = Normal(15.0, 0.5)
 
 # Matern GP
-ν = 1.5
+ν = 2.5
 ρ = 0.8
 σk = 1.2
-gp = IntegratedGeneralMaternGP(ν, ρ, σk^2)
+α = -0.5
+base_gp = CPEMaternGP(ν, ρ, σk^2)
+gp = DynamicsInformedCPEMaternGP(base_gp, α)
 
 # Simulation
 τ = 1.0
@@ -41,7 +41,7 @@ d = 40
 
 function simulate(
     rng::AbstractRNG,
-    gp::IntegratedMaternGP,
+    gp::DynamicsInformedCPEMaternGP,
     τ::Float64,
     K::Int,
     x1_prior::Normal,
@@ -102,8 +102,10 @@ function simulate(
         ts[d] = t_new
     end
 
-    # Add prior
-    xs_true .+= x0
+    # Add exponentially decaying prior
+    for k in 1:K
+        xs_true[k] += x0 * exp(α * (k - 1) * τ)
+    end
 
     # Sample observations
     for k in 1:K
@@ -114,7 +116,7 @@ function simulate(
 end
 
 # Simulate at higher resolution
-xs_true, ys = simulate(rng, gp, τ / thin, K * thin, x1_prior, σϵ, d * thin)
+xs_true, ys = simulate(rng, gp, τ / thin, K * thin, x1_prior, σϵ, d * thin);
 # Thin measurements
 ys = ys[1:thin:end]
 
@@ -193,7 +195,8 @@ for k in 3:d
 
     w = F_sub.U' \ (@view ks[1:m])
     f = F_sub.U \ w
-    f_rem = 1 - sum(f)
+    # f_rem = 1 - sum(f)
+    f_rem = exp(α * t_new) * (1 - sum(f .* exp.(α * ((@view ts[1:m]) .- t_new))))
     q2 = k_new - sum(abs2, w)
 
     f = f[m:-1:1]  # Reverse ordering to account for x having different ordering to k/t
@@ -236,7 +239,8 @@ for k in (d + 1):K
 
     w = F.U' \ ks
     f = F.U \ w
-    f_prior = 1 - sum(f)
+    # f_prior = 1 - sum(f)
+    f_prior = exp(α * t_new) * (1 - sum(f .* exp.(α * (ts .- t_new))))
     q2 = k_new - sum(abs2, w)
 
     f = f[(d - 1):-1:1]  # Reverse ordering to account for x having different ordering to k/t
@@ -277,5 +281,3 @@ plot!(
     fillalpha=0.2,
 )
 display(p)
-
-end

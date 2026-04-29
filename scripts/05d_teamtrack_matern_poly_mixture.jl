@@ -1,19 +1,16 @@
-module SCRIPT_05a
-
 using CSV
 using DataFrames
 using Plots
 using Random
-using Statistics
 
 rng = MersenneTwister(1234)
-d = 20
-thinning_factor = 30
-σadd = 0.3
+d = 50
+thinning_factor = 6
+σadd = 0.2
 σlabel = 0.02  # label measurment
 σϵ = sqrt(σadd^2 + σlabel^2)  # Observation noise std
 
-path = joinpath(split("teamtrack/teamtrack/soccer_top/train/annotations", "/"))
+path = "teamtrack/teamtrack/soccer_top/train/annotations"
 prefix = "D_20220220_1"
 
 data_set = 0
@@ -56,58 +53,6 @@ for team in 0:1
     end
 end
 
-# Plot all players
-colours = distinguishable_colors(11)
-p = plot(;
-    title="Teamtrack Trajectories",
-    xlabel="X",
-    ylabel="Y",
-    size=(800, 600),
-    legend=:outerright,
-    aspect_ratio=1,
-)
-for team in 0:1
-    for player in 0:10
-        if (team == 0 && player == 0) || (team == 1 && player == 10)
-            continue  # Skip goalkeepers
-        end
-        cx_col = "$(team)_$(player)_bb_cx"
-        cy_col = "$(team)_$(player)_bb_cy"
-        plot!(
-            p,
-            df[:, cx_col],
-            df[:, cy_col];
-            label="Team $(team + 1) Player $(player + 1)",
-            color=colours[player + 1],
-            lw=2,
-            linestyle=team == 0 ? :dot : :dash,
-        )
-    end
-end
-display(p)
-
-# Plot times of missing data
-p_missing = plot(;
-    title="Missing Data Times",
-    xlabel="Frame",
-    ylabel="Player",
-    size=(800, 600),
-    legend=false,
-)
-for team in 0:1
-    for player in 0:10
-        if (team == 0 && player == 0) || (team == 1 && player == 10)
-            continue  # Skip goalkeepers
-        end
-        cx_col = "$(team)_$(player)_bb_cx"
-        cy_col = "$(team)_$(player)_bb_cy"
-        missing_frames = findall(ismissing.(df[:, cx_col]))
-        y_vals = fill(player + 1 + team * 11, length(missing_frames))
-        scatter!(p_missing, missing_frames, y_vals; ms=2, color=colours[player + 1])
-    end
-end
-display(p_missing)
-
 # Average over all players who are not goalkeepers (only include those with no missing)
 all_xs_true_raw = Vector{Float64}[]
 for (i, (team, player)) in enumerate([
@@ -122,91 +67,57 @@ for (i, (team, player)) in enumerate([
     push!(all_xs_true_raw, xs)
 end
 
-# Interpolate missing values
-function interpolate_missing(ys)
-    n = length(ys)
-    for i in 1:n
-        if isnan(ys[i])
-            # Find next non-missing value
-            j = i + 1
-            while j <= n && isnan(ys[j])
-                j += 1
-            end
-            if j <= n
-                ys[i] = ys[j]
-            else
-                ys[i] = ys[i - 1]  # Use previous value if at end
-            end
-        end
-    end
-    return ys
-end
-
 # Thin to one observation every 2 seconds (60 frames)
+# xs_true = xs_true[1:15:end]
 all_xs_true = [xs_true[1:thinning_factor:end] for xs_true in all_xs_true_raw]
+# Cut short
+all_xs_true = [xs_true[1:200] for xs_true in all_xs_true]
 K = length(all_xs_true[1])
 τ = thinning_factor * 1 / 30
 ts = collect(range(0; step=τ, length=K))
 
 # Normalise to zero mean, unit variance
+# μ_x = mean(xs_true)
+# σ_x = std(xs_true)
+# xs_true = (xs_true .- μ_x) ./ σ_x
 for i in 1:length(all_xs_true)
     μ_x = mean(all_xs_true[i])
     σ_x = std(all_xs_true[i])
     all_xs_true[i] = (all_xs_true[i] .- μ_x) ./ σ_x
 end
 
+# ys = xs_true .+ σϵ * randn(rng, K)  # Noisy observations
 all_ys = [xs_true .+ σadd * randn(rng, K) for xs_true in all_xs_true]
 
-# Normalise truth
-p = 6
-xss = all_xs_true_raw[p]
-xss = (xss .- mean(xss)) ./ std(xss)
-
 # Plot truth and observations
-num_points = 60
 p2 = plot(
-    (0:(num_points * thinning_factor - 1)) / 30,
-    xss[1:(num_points * thinning_factor)];
-    xlabel="Time (s)",
-    ylabel="Normalised Horizontal Position",
-    label="Full Ground Truth",
+    ts[1:200],
+    all_xs_true[1][1:200];
+    title="Team 2 Player 6 X Position",
+    xlabel="Frame",
+    ylabel="X Position",
     color=:blue,
     lw=2,
+    size=(800, 400),
 )
-scatter!(
-    p2,
-    ts[1:num_points],
-    all_xs_true[p][1:num_points];
-    label="Thinned Ground Truth",
-    color=:blue,
-    ms=3,
-    alpha=1,
-)
-scatter!(
-    p2,
-    ts[1:num_points],
-    all_ys[p][1:num_points];
-    label="Simulated Observations",
-    color=:red,
-    ms=3,
-    alpha=0.5,
-)
+scatter!(p2, ts[1:200], all_ys[1][1:200]; label="Observations", color=:red, ms=4, alpha=0.5)
 display(p2)
-savefig(p2, "scripts/figs/trajectory_sample.pdf")
 
-using IntegratedGPs
+using IntegratedMaternGPs
 using Distributions
 using LinearAlgebra
 using ProgressMeter
 
-function compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d=30)
-    gp = integrate(MaternGP(ν, ρ, σ2))
+function compute_filtering_ll(ρ_short, ρ_long, σ2_short, σ2_long, σϵ, τ, ys, d=30)
+    # gp = integrate(CPEMaternGP(ν, ρ, σ2))
+    gp = IntegratedMaternGPs.Mixture([
+        integrate(CPEMaternGP(1.5, ρ_short, σ2_short)),
+        integrate(CPEMaternGP(10.5, ρ_long, σ2_long)),  # Approximate ν = Inf
+    ])
     K = length(ys)
 
     μs = Vector{Float64}(undef, K)
     σ2s = Vector{Float64}(undef, K)
-    μs_pred = Vector{Float64}(undef, K)
-    σ2s_pred = Vector{Float64}(undef, K)
 
     # Initialize the state
     μ = Vector{Float64}(undef, d)
@@ -223,10 +134,6 @@ function compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d=30)
     # Initial (non-prior) state
     μ[d - 1] = μ[d]
     Σ[d - 1, d - 1] = kernel(gp, τ, τ)
-
-    μs_pred[2] = μ[d - 1]
-    σ2s_pred[2] = Σ[d - 1, d - 1]
-
     # TODO: could set these to zero initially
     Σ[d - 1, d] = 0.0
     Σ[d, d - 1] = 0.0
@@ -276,9 +183,6 @@ function compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d=30)
         )
         Σ[d - k + 1, d - k + 1] += q2
 
-        μs_pred[k] = μ[d - k + 1]
-        σ2s_pred[k] = Σ[d - k + 1, d - k + 1]
-
         # Perform Kalman update
         i = d - k + 1
         y_pred = μ[i]
@@ -288,6 +192,10 @@ function compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d=30)
         μ[i:d] += G * y_err
         Σ[i:d, i:d] -= G * Σ[i:d, i]'
 
+        # Store the filtered state
+        # println(k)
+        # println(round.(ks, digits=2))
+        # println("f: ", any(isnan.(f)), " q2: ", isnan(q2))
         μs[k] = μ[i]
         σ2s[k] = Σ[i, i]
         ll += logpdf(Normal(y_pred, sqrt(S)), ys[k + 1])
@@ -296,10 +204,29 @@ function compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d=30)
         F_sub = Cholesky(UpperTriangular(@view F.U[1:(m + 1), 1:(m + 1)]))
         windowed_cholesky_add_last!(F_sub, @view ks[1:(m + 1)])
 
+        # Manually compute Cholesky to avoid numerical issues
+        # K_mat = zeros(m + 1, m + 1)
+        # for i in 1:(m + 1)
+        #     for j in 1:(m + 1)
+        #         K_mat[i, j] = kernel(gp, i * τ, j * τ)
+        #     end
+        # end
+        # K_mat = Symmetric(K_mat)
+        # try
+        # F_sub = cholesky(K_mat; check=true)
+        # catch e
+        #     println("Dimension: $m")
+        #     println(K_mat)
+        #     rethrow(e)
+        # end
+
         ts[k - 1] = t_new
     end
 
-    # Times are now all relative to the shifting prior time, so w and f are fixed
+    # Times are now all relative to the shifting prior time (i.e. constant)
+    # t_new = d * τ
+
+    # For that reason, w and f are fixed
     t_new = d * τ
     ks .= kernel.(Ref(gp), ts, t_new)
     k_new = kernel(gp, t_new, t_new)
@@ -314,6 +241,13 @@ function compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d=30)
         ks .= kernel.(Ref(gp), ts, t_new)
         k_new = kernel(gp, t_new, t_new)
 
+        # w = F.U' \ ks
+        # f = F.U \ w
+        # f_prior = 1 - sum(f)
+        # q2 = k_new - sum(abs2, w)
+
+        # f = f[(d - 1):-1:1]  # Reverse ordering to account for x having different ordering to k/t
+
         A = ShiftingMarkovianTransition(f, f_prior)
 
         # Predict forwards
@@ -321,8 +255,11 @@ function compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d=30)
         quadratic_form!(Symmetric(Σ), A, Symmetric(Σ))
         Σ[1, 1] += q2
 
-        μs_pred[k] = μ[1]
-        σ2s_pred[k] = Σ[1, 1]
+        # println(round.(ks, digits=2))
+        # println(k_new)
+        # println()
+        # println(q2)
+        # println(Σ[1, 1])
 
         # Perform Kalman update
         y_pred = μ[1]
@@ -330,41 +267,60 @@ function compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d=30)
         S = Σ[1, 1] + σϵ^2
         G = Σ[:, 1] / S
         μ += G * y_err
+        # Σ -= G * Σ[:, 1]'
+        # Manually update in-place
         @inbounds for j in 1:d
             s = Σ[1, j]
+            # Update jth column
             for i in 1:d
                 @inbounds Σ[i, j] -= G[i] * s
             end
         end
 
+        # Store the filtered state
+        # println(S)
+        # println(σϵ^2)
         μs[k] = μ[1]
         σ2s[k] = Σ[1, 1]
         ll += logpdf(Normal(y_pred, sqrt(S)), ys[k])
+
+        # Update the window
+        # ks[1:(d - 2)] .= ks[2:(d - 1)]
+        # ks[d - 1] = k_new
+        # windowed_cholesky_update!(F, ks)
     end
 
-    return ll, μs, σ2s, μs_pred, σ2s_pred
+    return ll, μs, σ2s
 end
 
 # Test with some parameters
-ν = 1.5
-ρ = 0.1
-σ2 = 1.0
+ρ_short = 1.0
+ρ_long = 10.0
+σ2_short = 1.0
+σ2_long = 0.1
 
-compute_filtering_ll(ν, ρ, σ2, σϵ, τ, all_ys[1], d)
+compute_filtering_ll(ρ_short, ρ_long, σ2_short, σ2_long, σϵ, τ, all_ys[1], d)
 
 # Grid search over parameters
-νs = sort(unique(vcat(range(0.5, 6.0; length=10), range(0.5, 5.5; step=1.0))))
-ρs = 10 .^ range(-1, 0.5; length=10)
-σ2s = 10 .^ range(-4, 0; length=10)
+ρs_short = 10 .^ range(-3, -1.0; length=6)
+ρs_long = 10 .^ range(0.0, 1.0; length=6)
+σ2s_short = 10 .^ range(-2, 1.0; length=6)
+σ2s_long = 10 .^ range(-2, 0.0; length=6)
 
-grid_size = length(νs) * length(ρs) * length(σ2s)
+# grid_size = length(νs) * length(ρs) * length(σ2s)
+grid_size = length(ρs_short) * length(ρs_long) * length(σ2s_short) * length(σ2s_long)
 
-grid_lls = Array{Float64}(undef, length(νs), length(ρs), length(σ2s))
-flatten_parameter_indices = Tuple{Int,Int,Int}[]
-for i in 1:length(νs)
-    for j in 1:length(ρs)
-        for k in 1:length(σ2s)
-            push!(flatten_parameter_indices, (i, j, k))
+# grid_lls = Array{Float64}(undef, length(νs), length(ρs), length(σ2s))
+grid_lls = Array{Float64}(
+    undef, length(ρs_short), length(ρs_long), length(σ2s_short), length(σ2s_long)
+)
+flatten_parameter_indices = Tuple{Int,Int,Int,Int}[]
+for i in 1:length(ρs_short)
+    for j in 1:length(ρs_long)
+        for k in 1:length(σ2s_short)
+            for l in 1:length(σ2s_long)
+                push!(flatten_parameter_indices, (i, j, k, l))
+            end
         end
     end
 end
@@ -372,10 +328,19 @@ end
 # First verify that we can compute kernel values for all parameters
 K_mat = zeros(d, d)
 for i in 1:grid_size
-    ν = νs[flatten_parameter_indices[i][1]]
-    ρ = ρs[flatten_parameter_indices[i][2]]
-    σ2 = σ2s[flatten_parameter_indices[i][3]]
-    test_gp = integrate(MaternGP(ν, ρ, σ2))
+    # ν = νs[flatten_parameter_indices[i][1]]
+    # ρ = ρs[flatten_parameter_indices[i][2]]
+    # σ2 = σ2s[flatten_parameter_indices[i][3]]
+    ρ_short = ρs_short[flatten_parameter_indices[i][1]]
+    ρ_long = ρs_long[flatten_parameter_indices[i][2]]
+    σ2_short = σ2s_short[flatten_parameter_indices[i][3]]
+    σ2_long = σ2s_long[flatten_parameter_indices[i][4]]
+    # test_gp = integrate(CPEMaternGP(ν, ρ, σ2))
+    # test_gp = integrate(SquaredExponentialGP(ρ, σ2))
+    test_gp = IntegratedMaternGPs.Mixture([
+        integrate(CPEMaternGP(1.5, ρ_short, σ2_short)),
+        integrate(CPEMaternGP(10.5, ρ_long, σ2_long)),  # Approximate ν = Inf
+    ])
     global K_mat
     K_mat = zeros(d, d)
     for i in 1:d
@@ -394,57 +359,173 @@ end
 
 prog = Progress(grid_size)
 Threads.@threads for i in 1:grid_size
-    ν = νs[flatten_parameter_indices[i][1]]
-    ρ = ρs[flatten_parameter_indices[i][2]]
-    σ2 = σ2s[flatten_parameter_indices[i][3]]
-    try
-        ll = 0.0
-        for ys in all_ys
-            ll += compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d)[1]
-        end
-        # Normalise by series length and number of series
-        ll /= K
-        grid_lls[flatten_parameter_indices[i]...] = ll
-    catch
-        grid_lls[flatten_parameter_indices[i]...] = -Inf
+    # ν = νs[flatten_parameter_indices[i][1]]
+    # ρ = ρs[flatten_parameter_indices[i][2]]
+    # σ2 = σ2s[flatten_parameter_indices[i][3]]
+    ρ_short = ρs_short[flatten_parameter_indices[i][1]]
+    ρ_long = ρs_long[flatten_parameter_indices[i][2]]
+    σ2_short = σ2s_short[flatten_parameter_indices[i][3]]
+    σ2_long = σ2s_long[flatten_parameter_indices[i][4]]
+    ll = 0.0
+    for ys in all_ys
+        ll += compute_filtering_ll(ρ_short, ρ_long, σ2_short, σ2_long, σϵ, τ, ys, d)[1]
     end
+    # Normalise by series length and number of series
+    ll /= K
+    grid_lls[flatten_parameter_indices[i]...] = ll
     next!(prog)
 end
 
 # Pick best parameters
 ind = argmax(grid_lls)
-best_ν = νs[ind[1]]
-best_ρ = ρs[ind[2]]
-best_σ2 = σ2s[ind[3]]
+# best_ν = νs[ind[1]]
+# best_ρ = ρs[ind[2]]
+# best_σ2 = σ2s[ind[3]]
+best_ρ_short = ρs_short[ind[1]]
+best_ρ_long = ρs_long[ind[2]]
+best_σ2_short = σ2s_short[ind[3]]
+best_σ2_long = σ2s_long[ind[4]]
 
 # Is optimal value on the edge of the grid?
 is_interior = all(ind.I .> 1) && all(ind.I .< (size(grid_lls)))
 println("Is interior: $is_interior")
 
-# Plot LL vs ν profile at the best (ρ, σ²)
-m1 = plot(
-    νs,
-    grid_lls[:, ind[2], ind[3]];
-    xscale=:identity,
-    xlabel="ν",
-    ylabel="Maximum LL over ρ, σ²",
-    label="",
-    lw=2,
-    ylims=(-8.835, -8.788),
-)
-vline!(m1, [best_ν]; linestyle=:dash, color=:black, label="ML Estimate", lw=2)
-savefig(m1, "scripts/figs/nu_profile.pdf")
+# # Evaluate at best ν
+# h1 = heatmap(
+#     ρs,
+#     σ2s,
+#     grid_lls[ind[1], :, :]';
+#     xscale=:identity,
+#     yscale=:log10,
+#     xlabel="ρ",
+#     ylabel="σ²",
+#     title="Log-Likelihood (at best ν = $best_ν)",
+#     colorbar_title="LL",
+#     size=(600, 500),
+# )
 
+# h2 = heatmap(
+#     νs,
+#     ρs,
+#     grid_lls[:, :, ind[3]]';
+#     xscale=:identity,
+#     yscale=:log10,
+#     xlabel="ν",
+#     ylabel="ρ",
+#     title="Log-Likelihood (maximised over σ²)",
+#     colorbar_title="LL",
+#     size=(600, 500),
+# )
+
+# h3 = heatmap(
+#     νs,
+#     σ2s,
+#     grid_lls[:, ind[2], :]';
+#     xscale=:identity,
+#     yscale=:log10,
+#     xlabel="ν",
+#     ylabel="σ²",
+#     title="Log-Likelihood (maximised over ρ)",
+#     colorbar_title="LL",
+#     size=(600, 500),
+# )
+
+# h_plot = plot(h1, h2, h3; layout=(3, 1), size=(600, 1500), left_margin=50Plots.px)
+
+# Plot marginals by fixing other two parameters
+# m1 = plot(
+#     νs,
+#     grid_lls[:, ind[2], ind[3]];
+#     xscale=:identity,
+#     xlabel="ν",
+#     ylabel="Max LL",
+#     title="Max Log-Likelihood over ρ, σ²",
+#     size=(600, 400),
+# )
+# m2 = plot(
+#     ρs,
+#     grid_lls[ind[1], :, ind[3]];
+#     xscale=:identity,
+#     xlabel="ρ",
+#     ylabel="Max LL",
+#     title="Max Log-Likelihood over ν, σ²",
+#     size=(600, 400),
+# )
+# m3 = plot(
+#     σ2s,
+#     grid_lls[ind[1], ind[2], :];
+#     xscale=:log10,
+#     xlabel="σ²",
+#     ylabel="Max LL",
+#     title="Max Log-Likelihood over ν, ρ",
+#     size=(600, 400),
+# )
+# m_plot = plot(m1, m2, m3; layout=(3, 1), size=(600, 1200), left_margin=50Plots.px)
+m1 = plot(
+    ρs_short,
+    grid_lls[:, ind[2], ind[3], ind[4]];
+    xscale=:log10,
+    xlabel="ρ_short",
+    ylabel="Max LL",
+    title="Max Log-Likelihood over ρ_long, σ2_short, σ2_long",
+    size=(600, 400),
+)
+m2 = plot(
+    ρs_long,
+    grid_lls[ind[1], :, ind[3], ind[4]];
+    xscale=:log10,
+    xlabel="ρ_long",
+    ylabel="Max LL",
+    title="Max Log-Likelihood over ρ_short, σ2_short, σ2_long",
+    size=(600, 400),
+)
+m3 = plot(
+    σ2s_short,
+    grid_lls[ind[1], ind[2], :, ind[4]];
+    xscale=:log10,
+    xlabel="σ2_short",
+    ylabel="Max LL",
+    title="Max Log-Likelihood over ρ_short, ρ_long, σ2_long",
+    size=(600, 400),
+)
+m4 = plot(
+    σ2s_long,
+    grid_lls[ind[1], ind[2], ind[3], :];
+    xscale=:log10,
+    xlabel="σ2_long",
+    ylabel="Max LL",
+    title="Max Log-Likelihood over ρ_short, ρ_long, σ2_short",
+    size=(600, 400),
+)
+m_plot = plot(m1, m2, m3, m4; layout=(4, 1), size=(600, 1600), left_margin=50Plots.px)
+display(m_plot)
+
+# display(plot(h_plot, m_plot; layout=(1, 2), size=(1200, 1500)))
+
+# Print optimal parameters
 println("Best parameters:")
-println("ν = $best_ν")
-println("ρ = $best_ρ")
-println("σ² = $best_σ2")
+# println("ν = $best_ν")
+# println("ρ = $best_ρ")
+# println("σ² = $best_σ2")
+println("ρ_short = $best_ρ_short")
+println("ρ_long = $best_ρ_long")
+println("σ2_short = $best_σ2_short")
+println("σ2_long = $best_σ2_long")
 
 # Compute filtered states for best parameters
+# _, μs, σ2s = compute_filtering_ll(best_ν, best_ρ, best_σ2, σϵ, τ, ys, 10)
+
+# # Compute MSE
+# mse = mean((μs .- xs_true) .^ 2)
+# println("MSE:   $mse")
+
 mses = Float64[]
 for (i, xs_true) in enumerate(all_xs_true)
     ys = all_ys[i]
-    _, μs, σ2s, _, _ = compute_filtering_ll(best_ν, best_ρ, best_σ2, σϵ, τ, ys, d)
+    # _, μs, σ2s = compute_filtering_ll(best_ν, best_ρ, best_σ2, σϵ, τ, ys, d)
+    _, μs, σ2s = compute_filtering_ll(
+        best_ρ_short, best_ρ_long, best_σ2_short, best_σ2_long, σϵ, τ, ys, d
+    )
     mse = mean((μs .- xs_true) .^ 2)
     push!(mses, mse)
 end
@@ -453,17 +534,6 @@ println("MSE:   $mse")
 
 # Compare to noise
 println("Noise: $(σϵ^2)")
-
-# One-step ahead predictions
-one_step_mses = Float64[]
-for (i, xs_true) in enumerate(all_xs_true)
-    ys = all_ys[i]
-    _, _, _, μs_pred, σ2s_pred = compute_filtering_ll(best_ν, best_ρ, best_σ2, σϵ, τ, ys, d)
-    mse = mean((μs_pred[2:end] .- xs_true[2:end]) .^ 2)
-    push!(one_step_mses, mse)
-end
-one_step_mse = mean(one_step_mses)
-println("One-step ahead MSE:   $one_step_mse")
 
 #### VALIDATION ON NEW DATA ####
 
@@ -544,19 +614,6 @@ end
 mse_val = mean(mses_val)
 println("Validation MSE:   $mse_val")
 println("Noise: $(σϵ^2)")
-
-# One step ahead predictions
-one_step_mses_val = Float64[]
-for (i, xs_true_val) in enumerate(all_xs_true_val)
-    ys_val = all_ys_val[i]
-    _, _, _, μs_pred_val, σ2s_pred_val = compute_filtering_ll(
-        best_ν, best_ρ, best_σ2, σϵ, τ, ys_val, d
-    )
-    step_mse = mean((μs_pred_val[2:end] .- xs_true_val[2:end]) .^ 2)
-    push!(one_step_mses_val, step_mse)
-end
-one_step_mse_val = mean(one_step_mses_val)
-println("Validation One-step ahead MSE:   $one_step_mse_val")
 
 # Compare to Singer model
 struct SingerModel{T}
@@ -664,9 +721,6 @@ function compute_filtering_ll_singer(model::SingerModel, σϵ, ys)
     μs = Vector{Float64}(undef, K)
     σ2s = Vector{Float64}(undef, K)
 
-    μs_pred = Vector{Float64}(undef, K)
-    σ2s_pred = Vector{Float64}(undef, K)
-
     # Initialize the state
     μ = compute_μ0(model, ys)
     Σ = compute_Σ0(model, σϵ)
@@ -680,9 +734,6 @@ function compute_filtering_ll_singer(model::SingerModel, σϵ, ys)
         # Predict forwards
         μ = A * μ
         Σ = A * Σ * A' + Q
-
-        μs_pred[k] = μ[1]
-        σ2s_pred[k] = Σ[1, 1]
 
         # Perform Kalman update
         y_pred = μ[1]
@@ -698,7 +749,7 @@ function compute_filtering_ll_singer(model::SingerModel, σϵ, ys)
         ll += logpdf(Normal(y_pred, sqrt(S)), ys[k])
     end
 
-    return ll, μs, σ2s, μs_pred, σ2s_pred
+    return ll, μs, σ2s
 end
 
 # Test with some parameters
@@ -760,27 +811,12 @@ singer_model = SingerModel(best_α, best_σm2, τ, best_σM2)
 mses_val_singer = Float64[]
 for (i, xs_true_val) in enumerate(all_xs_true_val)
     ys_val = all_ys_val[i]
-    _, μs_val_singer, σ2s_val_singer, _, _ = compute_filtering_ll_singer(
-        singer_model, σϵ, ys_val
-    )
+    _, μs_val_singer, σ2s_val_singer = compute_filtering_ll_singer(singer_model, σϵ, ys_val)
     mse_val_singer = mean((μs_val_singer .- xs_true_val) .^ 2)
     push!(mses_val_singer, mse_val_singer)
 end
 mse_val_singer = mean(mses_val_singer)
 println("Validation MSE (Singer):   $mse_val_singer")
-
-# One step ahead predictions for singer
-one_step_mses_val_singer = Float64[]
-for (i, xs_true_val) in enumerate(all_xs_true_val)
-    ys_val = all_ys_val[i]
-    _, _, _, μs_pred_val_singer, σ2s_pred_val_singer = compute_filtering_ll_singer(
-        singer_model, σϵ, ys_val
-    )
-    step_mse = mean((μs_pred_val_singer[2:end] .- xs_true_val[2:end]) .^ 2)
-    push!(one_step_mses_val_singer, step_mse)
-end
-one_step_mse_val_singer = mean(one_step_mses_val_singer)
-println("Validation One-step ahead MSE (Singer):   $one_step_mse_val_singer")
 
 # Finally compare to nearly constant velocity model
 struct CVModel{T}
@@ -830,8 +866,6 @@ function compute_filtering_ll_cv(model::CVModel, σϵ, ys)
 
     μs = Vector{Float64}(undef, K)
     σ2s = Vector{Float64}(undef, K)
-    μs_pred = Vector{Float64}(undef, K)
-    σ2s_pred = Vector{Float64}(undef, K)
 
     # Initialize the state
     μ = compute_μ0(model, ys)
@@ -847,9 +881,6 @@ function compute_filtering_ll_cv(model::CVModel, σϵ, ys)
         μ = A * μ
         Σ = A * Σ * A' + Q
 
-        μs_pred[k] = μ[1]
-        σ2s_pred[k] = Σ[1, 1]
-
         # Perform Kalman update
         y_pred = μ[1]
         y_err = ys[k] - y_pred
@@ -864,7 +895,7 @@ function compute_filtering_ll_cv(model::CVModel, σϵ, ys)
         ll += logpdf(Normal(y_pred, sqrt(S)), ys[k])
     end
 
-    return ll, μs, σ2s, μs_pred, σ2s_pred
+    return ll, μs, σ2s
 end
 
 # Test with some parameters
@@ -917,22 +948,9 @@ cv_model = CVModel(best_σv2, τ, best_σV2)
 mses_val_cv = Float64[]
 for (i, xs_true_val) in enumerate(all_xs_true_val)
     ys_val = all_ys_val[i]
-    _, μs_val_cv, σ2s_val_cv, _, _ = compute_filtering_ll_cv(cv_model, σϵ, ys_val)
+    _, μs_val_cv, σ2s_val_cv = compute_filtering_ll_cv(cv_model, σϵ, ys_val)
     mse_val_cv = mean((μs_val_cv .- xs_true_val) .^ 2)
     push!(mses_val_cv, mse_val_cv)
 end
 mse_val_cv = mean(mses_val_cv)
 println("Validation MSE (CV):   $mse_val_cv")
-
-# One step ahead predictions for cv
-one_step_mses_val_cv = Float64[]
-for (i, xs_true_val) in enumerate(all_xs_true_val)
-    ys_val = all_ys_val[i]
-    _, _, _, μs_pred_val_cv, σ2s_pred_val_cv = compute_filtering_ll_cv(cv_model, σϵ, ys_val)
-    step_mse = mean((μs_pred_val_cv[2:end] .- xs_true_val[2:end]) .^ 2)
-    push!(one_step_mses_val_cv, step_mse)
-end
-one_step_mse_val_cv = mean(one_step_mses_val_cv)
-println("Validation One-step ahead MSE (CV):   $one_step_mse_val_cv")
-
-end

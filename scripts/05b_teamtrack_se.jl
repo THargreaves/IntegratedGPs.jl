@@ -1,4 +1,4 @@
-module SCRIPT_05a
+module SCRIPT_05b
 
 using CSV
 using DataFrames
@@ -199,8 +199,8 @@ using Distributions
 using LinearAlgebra
 using ProgressMeter
 
-function compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d=30)
-    gp = integrate(MaternGP(ν, ρ, σ2))
+function compute_filtering_ll(ρ, σ2, σϵ, τ, ys, d=30)
+    gp = integrate(SquaredExponentialGP(ρ, σ2))
     K = length(ys)
 
     μs = Vector{Float64}(undef, K)
@@ -346,36 +346,31 @@ function compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d=30)
 end
 
 # Test with some parameters
-ν = 1.5
 ρ = 0.1
 σ2 = 1.0
 
-compute_filtering_ll(ν, ρ, σ2, σϵ, τ, all_ys[1], d)
+compute_filtering_ll(ρ, σ2, σϵ, τ, all_ys[1], d)
 
 # Grid search over parameters
-νs = sort(unique(vcat(range(0.5, 6.0; length=10), range(0.5, 5.5; step=1.0))))
 ρs = 10 .^ range(-1, 0.5; length=10)
-σ2s = 10 .^ range(-4, 0; length=10)
+σ2s = 10 .^ range(-4, 0.7; length=10)
 
-grid_size = length(νs) * length(ρs) * length(σ2s)
+grid_size = length(ρs) * length(σ2s)
 
-grid_lls = Array{Float64}(undef, length(νs), length(ρs), length(σ2s))
-flatten_parameter_indices = Tuple{Int,Int,Int}[]
-for i in 1:length(νs)
-    for j in 1:length(ρs)
-        for k in 1:length(σ2s)
-            push!(flatten_parameter_indices, (i, j, k))
-        end
+grid_lls = Array{Float64}(undef, length(ρs), length(σ2s))
+flatten_parameter_indices = Tuple{Int,Int}[]
+for j in 1:length(ρs)
+    for k in 1:length(σ2s)
+        push!(flatten_parameter_indices, (j, k))
     end
 end
 
 # First verify that we can compute kernel values for all parameters
 K_mat = zeros(d, d)
 for i in 1:grid_size
-    ν = νs[flatten_parameter_indices[i][1]]
-    ρ = ρs[flatten_parameter_indices[i][2]]
-    σ2 = σ2s[flatten_parameter_indices[i][3]]
-    test_gp = integrate(MaternGP(ν, ρ, σ2))
+    ρ = ρs[flatten_parameter_indices[i][1]]
+    σ2 = σ2s[flatten_parameter_indices[i][2]]
+    test_gp = integrate(SquaredExponentialGP(ρ, σ2))
     global K_mat
     K_mat = zeros(d, d)
     for i in 1:d
@@ -387,20 +382,19 @@ for i in 1:grid_size
     try
         cholesky(K_mat)
     catch e
-        println("Failed for ν=$ν, ρ=$ρ, σ2=$σ2")
+        println("Failed for ρ=$ρ, σ2=$σ2")
         rethrow(e)
     end
 end
 
 prog = Progress(grid_size)
 Threads.@threads for i in 1:grid_size
-    ν = νs[flatten_parameter_indices[i][1]]
-    ρ = ρs[flatten_parameter_indices[i][2]]
-    σ2 = σ2s[flatten_parameter_indices[i][3]]
+    ρ = ρs[flatten_parameter_indices[i][1]]
+    σ2 = σ2s[flatten_parameter_indices[i][2]]
     try
         ll = 0.0
         for ys in all_ys
-            ll += compute_filtering_ll(ν, ρ, σ2, σϵ, τ, ys, d)[1]
+            ll += compute_filtering_ll(ρ, σ2, σϵ, τ, ys, d)[1]
         end
         # Normalise by series length and number of series
         ll /= K
@@ -413,30 +407,15 @@ end
 
 # Pick best parameters
 ind = argmax(grid_lls)
-best_ν = νs[ind[1]]
-best_ρ = ρs[ind[2]]
-best_σ2 = σ2s[ind[3]]
+best_ρ = ρs[ind[1]]
+best_σ2 = σ2s[ind[2]]
 
 # Is optimal value on the edge of the grid?
 is_interior = all(ind.I .> 1) && all(ind.I .< (size(grid_lls)))
 println("Is interior: $is_interior")
 
-# Plot LL vs ν profile at the best (ρ, σ²)
-m1 = plot(
-    νs,
-    grid_lls[:, ind[2], ind[3]];
-    xscale=:identity,
-    xlabel="ν",
-    ylabel="Maximum LL over ρ, σ²",
-    label="",
-    lw=2,
-    ylims=(-8.835, -8.788),
-)
-vline!(m1, [best_ν]; linestyle=:dash, color=:black, label="ML Estimate", lw=2)
-savefig(m1, "scripts/figs/nu_profile.pdf")
-
+# Print optimal parameters
 println("Best parameters:")
-println("ν = $best_ν")
 println("ρ = $best_ρ")
 println("σ² = $best_σ2")
 
@@ -444,7 +423,7 @@ println("σ² = $best_σ2")
 mses = Float64[]
 for (i, xs_true) in enumerate(all_xs_true)
     ys = all_ys[i]
-    _, μs, σ2s, _, _ = compute_filtering_ll(best_ν, best_ρ, best_σ2, σϵ, τ, ys, d)
+    _, μs, σ2s, _, _ = compute_filtering_ll(best_ρ, best_σ2, σϵ, τ, ys, d)
     mse = mean((μs .- xs_true) .^ 2)
     push!(mses, mse)
 end
@@ -458,7 +437,7 @@ println("Noise: $(σϵ^2)")
 one_step_mses = Float64[]
 for (i, xs_true) in enumerate(all_xs_true)
     ys = all_ys[i]
-    _, _, _, μs_pred, σ2s_pred = compute_filtering_ll(best_ν, best_ρ, best_σ2, σϵ, τ, ys, d)
+    _, _, _, μs_pred, σ2s_pred = compute_filtering_ll(best_ρ, best_σ2, σϵ, τ, ys, d)
     mse = mean((μs_pred[2:end] .- xs_true[2:end]) .^ 2)
     push!(one_step_mses, mse)
 end
@@ -537,7 +516,7 @@ all_ys_val = [xs_true .+ σadd * randn(rng, K_val) for xs_true in all_xs_true_va
 mses_val = Float64[]
 for (i, xs_true_val) in enumerate(all_xs_true_val)
     ys_val = all_ys_val[i]
-    _, μs_val, σ2s_val = compute_filtering_ll(best_ν, best_ρ, best_σ2, σϵ, τ, ys_val, d)
+    _, μs_val, σ2s_val = compute_filtering_ll(best_ρ, best_σ2, σϵ, τ, ys_val, d)
     mse_val = mean((μs_val .- xs_true_val) .^ 2)
     push!(mses_val, mse_val)
 end
@@ -550,389 +529,12 @@ one_step_mses_val = Float64[]
 for (i, xs_true_val) in enumerate(all_xs_true_val)
     ys_val = all_ys_val[i]
     _, _, _, μs_pred_val, σ2s_pred_val = compute_filtering_ll(
-        best_ν, best_ρ, best_σ2, σϵ, τ, ys_val, d
+        best_ρ, best_σ2, σϵ, τ, ys_val, d
     )
     step_mse = mean((μs_pred_val[2:end] .- xs_true_val[2:end]) .^ 2)
     push!(one_step_mses_val, step_mse)
 end
 one_step_mse_val = mean(one_step_mses_val)
 println("Validation One-step ahead MSE:   $one_step_mse_val")
-
-# Compare to Singer model
-struct SingerModel{T}
-    α::T
-    σm2::T
-    τ::T
-    σM2::T  # initialisation std
-end
-
-using StaticArrays
-
-function compute_A(model::SingerModel)
-    α, σm2, τ = model.α, model.σm2, model.τ
-    #! format: off
-    return @SMatrix [
-        1.0  τ    1 / α^2 * (-1 + α * τ + exp(-α * τ))
-        0.0  1.0  1 / α * (1 - exp(-α * τ))
-        0.0  0.0  exp(-α * τ)
-    ]
-    #! format: on
-end
-
-# \begin{aligned}
-# q 11=\frac{1}{2 \alpha^5}\left[1-e^{-2 \alpha T}+2 \alpha T\right. & +\frac{2 \alpha^3 T^3}{3} \\
-# & \left.-2 \alpha^2 T^2-4 \alpha T e^{-\alpha T}\right] \\
-# q 12=\frac{1}{2 \alpha^4}\left[e^{-2 \alpha T}+1-2 e^{-\alpha T}\right. & \\
-# & \left.+2 \alpha T e^{-\alpha T}-2 \alpha T+\alpha^2 T^2\right]
-# \end{aligned}
-# \begin{aligned}
-# & q 13=\frac{1}{2 \alpha^3}\left[1-e^{-2 \alpha T}-2 \alpha T e^{-\alpha T}\right] \\
-# & q 22=\frac{1}{2 \alpha^3}\left[4 e^{-\alpha T}-3-e^{-2 \alpha T}+2 \alpha T\right] \\
-# & q 23=\frac{1}{2 \alpha^2}\left[e^{-2 \alpha T}+1-2 e^{-\alpha T}\right] \\
-# & q 33=\frac{1}{2 \alpha}\left[1-e^{-2 \alpha T}\right] .
-# \end{aligned}
-
-function compute_Q(model::SingerModel)
-    α, σm2, τ = model.α, model.σm2, model.τ
-    q11 = (
-        (1 / (2 * α^5)) * (
-            1 - exp(-2 * α * τ) + 2 * α * τ + (2 * α^3 * τ^3) / 3 - 2 * α^2 * τ^2 -
-            4 * α * τ * exp(-α * τ)
-        )
-    )
-    q12 = (
-        (1 / (2 * α^4)) * (
-            exp(-2 * α * τ) + 1 - 2 * exp(-α * τ) + 2 * α * τ * exp(-α * τ) - 2 * α * τ +
-            α^2 * τ^2
-        )
-    )
-    q13 = (1 / (2 * α^3)) * (1 - exp(-2 * α * τ) - 2 * α * τ * exp(-α * τ))
-    q22 = (1 / (2 * α^3)) * (4 * exp(-α * τ) - 3 - exp(-2 * α * τ) + 2 * α * τ)
-    q23 = (1 / (2 * α^2)) * (exp(-2 * α * τ) + 1 - 2 * exp(-α * τ))
-    q33 = (1 / (2 * α)) * (1 - exp(-2 * α * τ))
-    Q = 2 * σm2 * α * @SMatrix [
-        q11 q12 q13
-        q12 q22 q23
-        q13 q23 q33
-    ]
-    return Q
-end
-
-function compute_μ0(model::SingerModel, ys)
-    x1 = ys[1]
-    x2 = (ys[2] - ys[1]) / model.τ
-    x3 = 0.0
-    return @SVector [x1, x2, x3]
-end
-
-# \begin{aligned}
-# & P 11(1 / 1)=\sigma_R^2 \\
-# & P 12(1 / 1)=P 21(1 / 1)=\sigma_R^2 / T \\
-# & P 13(1 / 1)=P 31(1 / 1)=0 \\
-# & P 22(1 / 1)=2 \sigma_R^2 / T^2+\frac{\sigma_M^2}{\alpha^4 T^2}\left[2-\alpha^2 T^2+\frac{2 \alpha^3 T^3}{3}\right. \\
-# & \left.\quad-2 e^{-\alpha T}-2 \alpha T e^{-\alpha T}\right] \\
-# & P 23(1 / 1)=P 32(1 / 1)=\frac{\sigma_M^2}{\alpha^2 T}\left[e^{-\alpha T}+\alpha T-1\right]
-# \end{aligned}
-
-function compute_Σ0(model::SingerModel, σϵ)
-    τ, σM2 = model.τ, model.σM2
-    P11 = σϵ^2
-    P12 = σϵ^2 / τ
-    P13 = 0.0
-    P22 = (
-        (2 * σϵ^2) / τ^2 +
-        (σM2 / (model.α^4 * τ^2)) * (
-            2 - model.α^2 * τ^2 + (2 * model.α^3 * τ^3) / 3 - 2 * exp(-model.α * τ) -
-            2 * model.α * τ * exp(-model.α * τ)
-        )
-    )
-    P23 = (σM2 / (model.α^2 * τ)) * (exp(-model.α * τ) + model.α * τ - 1)
-    P33 = σM2
-    P = @SMatrix [
-        P11 P12 P13
-        P12 P22 P23
-        P13 P23 P33
-    ]
-    return P
-end
-
-function compute_filtering_ll_singer(model::SingerModel, σϵ, ys)
-    A = compute_A(model)
-    Q = compute_Q(model)
-    K = length(ys)
-
-    μs = Vector{Float64}(undef, K)
-    σ2s = Vector{Float64}(undef, K)
-
-    μs_pred = Vector{Float64}(undef, K)
-    σ2s_pred = Vector{Float64}(undef, K)
-
-    # Initialize the state
-    μ = compute_μ0(model, ys)
-    Σ = compute_Σ0(model, σϵ)
-    ll = 0.0
-
-    μs[1] = μ[1]
-    σ2s[1] = Σ[1, 1]
-
-    # Prediction loop
-    for k in 2:K
-        # Predict forwards
-        μ = A * μ
-        Σ = A * Σ * A' + Q
-
-        μs_pred[k] = μ[1]
-        σ2s_pred[k] = Σ[1, 1]
-
-        # Perform Kalman update
-        y_pred = μ[1]
-        y_err = ys[k] - y_pred
-        S = Σ[1, 1] + σϵ^2
-        G = Σ[:, 1] / S
-        μ += G * y_err
-        Σ -= G * Σ[:, 1]'
-
-        # Store the filtered state
-        μs[k] = μ[1]
-        σ2s[k] = Σ[1, 1]
-        ll += logpdf(Normal(y_pred, sqrt(S)), ys[k])
-    end
-
-    return ll, μs, σ2s, μs_pred, σ2s_pred
-end
-
-# Test with some parameters
-α = 0.5
-σm2 = 0.1
-σM2 = 1.0
-singer_model = SingerModel(α, σm2, τ, σM2)
-compute_filtering_ll_singer(singer_model, σϵ, all_ys[1])
-
-# Grid search over parameters
-αs = 10 .^ range(-2, 4; length=50)
-σm2s = 10 .^ range(-3, 1; length=30)
-σM2s = 10 .^ range(-1, 3; length=30)
-grid_size_singer = length(αs) * length(σm2s) * length(σM2s)
-grid_lls_singer = Array{Float64}(undef, length(αs), length(σm2s), length(σM2s))
-flatten_parameter_indices_singer = Tuple{Int,Int,Int}[]
-for i in 1:length(αs)
-    for j in 1:length(σm2s)
-        for k in 1:length(σM2s)
-            push!(flatten_parameter_indices_singer, (i, j, k))
-        end
-    end
-end
-prog_singer = Progress(grid_size_singer)
-Threads.@threads for i in 1:grid_size_singer
-    α = αs[flatten_parameter_indices_singer[i][1]]
-    σm2 = σm2s[flatten_parameter_indices_singer[i][2]]
-    σM2 = σM2s[flatten_parameter_indices_singer[i][3]]
-    singer_model = SingerModel(α, σm2, τ, σM2)
-    ll = 0.0
-    for ys in all_ys
-        ll += compute_filtering_ll_singer(singer_model, σϵ, ys)[1]
-    end
-    # Normalise by series length and number of series
-    ll /= K
-    grid_lls_singer[flatten_parameter_indices_singer[i]...] = ll
-    next!(prog_singer)
-end
-
-# Pick best parameters
-ind_singer = argmax(grid_lls_singer)
-best_α = αs[ind_singer[1]]
-best_σm2 = σm2s[ind_singer[2]]
-best_σM2 = σM2s[ind_singer[3]]
-# Is optimal value on the edge of the grid?
-is_interior_singer = all(ind_singer.I .> 1) && all(ind_singer.I .< (size(grid_lls_singer)))
-println("Is interior: $is_interior_singer")
-
-# Print optimal parameters
-println("Best Singer parameters:")
-println("α = $best_α")
-println("σm² = $best_σm2")
-println("σM² = $best_σM2")
-
-# Compute filtered states for best parameters
-singer_model = SingerModel(best_α, best_σm2, τ, best_σM2)
-
-# Validation MSEs for singer
-mses_val_singer = Float64[]
-for (i, xs_true_val) in enumerate(all_xs_true_val)
-    ys_val = all_ys_val[i]
-    _, μs_val_singer, σ2s_val_singer, _, _ = compute_filtering_ll_singer(
-        singer_model, σϵ, ys_val
-    )
-    mse_val_singer = mean((μs_val_singer .- xs_true_val) .^ 2)
-    push!(mses_val_singer, mse_val_singer)
-end
-mse_val_singer = mean(mses_val_singer)
-println("Validation MSE (Singer):   $mse_val_singer")
-
-# One step ahead predictions for singer
-one_step_mses_val_singer = Float64[]
-for (i, xs_true_val) in enumerate(all_xs_true_val)
-    ys_val = all_ys_val[i]
-    _, _, _, μs_pred_val_singer, σ2s_pred_val_singer = compute_filtering_ll_singer(
-        singer_model, σϵ, ys_val
-    )
-    step_mse = mean((μs_pred_val_singer[2:end] .- xs_true_val[2:end]) .^ 2)
-    push!(one_step_mses_val_singer, step_mse)
-end
-one_step_mse_val_singer = mean(one_step_mses_val_singer)
-println("Validation One-step ahead MSE (Singer):   $one_step_mse_val_singer")
-
-# Finally compare to nearly constant velocity model
-struct CVModel{T}
-    σv2::T
-    τ::T
-    σV2::T  # initialisation std
-end
-
-function compute_A(model::CVModel)
-    τ = model.τ
-    return @SMatrix [
-        1.0 τ
-        0.0 1.0
-    ]
-end
-
-function compute_Q(model::CVModel)
-    σv2, τ = model.σv2, model.τ
-    return σv2 * @SMatrix [
-        (τ^3)/3 (τ^2)/2
-        (τ^2)/2 τ
-    ]
-end
-
-function compute_μ0(model::CVModel, ys)
-    x1 = ys[1]
-    x2 = (ys[2] - ys[1]) / model.τ
-    return @SVector [x1, x2]
-end
-
-function compute_Σ0(model::CVModel, σϵ)
-    τ, σV2 = model.τ, model.σV2
-    P11 = σϵ^2
-    P12 = σϵ^2 / τ
-    P22 = (2 * σϵ^2) / τ^2 + (σV2 * τ) / 3
-    P = @SMatrix [
-        P11 P12
-        P12 P22
-    ]
-    return P
-end
-
-function compute_filtering_ll_cv(model::CVModel, σϵ, ys)
-    A = compute_A(model)
-    Q = compute_Q(model)
-    K = length(ys)
-
-    μs = Vector{Float64}(undef, K)
-    σ2s = Vector{Float64}(undef, K)
-    μs_pred = Vector{Float64}(undef, K)
-    σ2s_pred = Vector{Float64}(undef, K)
-
-    # Initialize the state
-    μ = compute_μ0(model, ys)
-    Σ = compute_Σ0(model, σϵ)
-    ll = 0.0
-
-    μs[1] = μ[1]
-    σ2s[1] = Σ[1, 1]
-
-    # Prediction loop
-    for k in 2:K
-        # Predict forwards
-        μ = A * μ
-        Σ = A * Σ * A' + Q
-
-        μs_pred[k] = μ[1]
-        σ2s_pred[k] = Σ[1, 1]
-
-        # Perform Kalman update
-        y_pred = μ[1]
-        y_err = ys[k] - y_pred
-        S = Σ[1, 1] + σϵ^2
-        G = Σ[:, 1] / S
-        μ += G * y_err
-        Σ -= G * Σ[:, 1]'
-
-        # Store the filtered state
-        μs[k] = μ[1]
-        σ2s[k] = Σ[1, 1]
-        ll += logpdf(Normal(y_pred, sqrt(S)), ys[k])
-    end
-
-    return ll, μs, σ2s, μs_pred, σ2s_pred
-end
-
-# Test with some parameters
-σv2 = 0.1
-σV2 = 1.0
-cv_model = CVModel(σv2, τ, σV2)
-compute_filtering_ll_cv(cv_model, σϵ, all_ys[1])
-
-# Grid search over parameters
-σv2s = 10 .^ range(-3, 1; length=30)
-σV2s = 10 .^ range(-1, 3; length=30)
-grid_size_cv = length(σv2s) * length(σV2s)
-grid_lls_cv = Array{Float64}(undef, length(σv2s), length(σV2s))
-flatten_parameter_indices_cv = Tuple{Int,Int}[]
-for i in 1:length(σv2s)
-    for j in 1:length(σV2s)
-        push!(flatten_parameter_indices_cv, (i, j))
-    end
-end
-prog_cv = Progress(grid_size_cv)
-Threads.@threads for i in 1:grid_size_cv
-    σv2 = σv2s[flatten_parameter_indices_cv[i][1]]
-    σV2 = σV2s[flatten_parameter_indices_cv[i][2]]
-    cv_model = CVModel(σv2, τ, σV2)
-    ll = 0.0
-    for ys in all_ys
-        ll += compute_filtering_ll_cv(cv_model, σϵ, ys)[1]
-    end
-    # Normalise by series length and number of series 
-    ll /= K
-    grid_lls_cv[flatten_parameter_indices_cv[i]...] = ll
-    next!(prog_cv)
-end
-# Pick best parameters
-ind_cv = argmax(grid_lls_cv)
-best_σv2 = σv2s[ind_cv[1]]
-best_σV2 = σV2s[ind_cv[2]]
-# Is optimal value on the edge of the grid?
-is_interior_cv = all(ind_cv.I .> 1) && all(ind_cv.I .< (size(grid_lls_cv) .- 1))
-println("Is interior: $is_interior_cv")
-
-# Print optimal parameters
-println("Best CV parameters:")
-println("σv² = $best_σv2")
-println("σV² = $best_σV2")
-
-# Compute filtered states for best parameters
-cv_model = CVModel(best_σv2, τ, best_σV2)
-# Validation MSEs for cv
-mses_val_cv = Float64[]
-for (i, xs_true_val) in enumerate(all_xs_true_val)
-    ys_val = all_ys_val[i]
-    _, μs_val_cv, σ2s_val_cv, _, _ = compute_filtering_ll_cv(cv_model, σϵ, ys_val)
-    mse_val_cv = mean((μs_val_cv .- xs_true_val) .^ 2)
-    push!(mses_val_cv, mse_val_cv)
-end
-mse_val_cv = mean(mses_val_cv)
-println("Validation MSE (CV):   $mse_val_cv")
-
-# One step ahead predictions for cv
-one_step_mses_val_cv = Float64[]
-for (i, xs_true_val) in enumerate(all_xs_true_val)
-    ys_val = all_ys_val[i]
-    _, _, _, μs_pred_val_cv, σ2s_pred_val_cv = compute_filtering_ll_cv(cv_model, σϵ, ys_val)
-    step_mse = mean((μs_pred_val_cv[2:end] .- xs_true_val[2:end]) .^ 2)
-    push!(one_step_mses_val_cv, step_mse)
-end
-one_step_mse_val_cv = mean(one_step_mses_val_cv)
-println("Validation One-step ahead MSE (CV):   $one_step_mse_val_cv")
 
 end
