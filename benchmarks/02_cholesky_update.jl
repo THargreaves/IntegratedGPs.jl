@@ -56,41 +56,43 @@ display(
 )
 
 # Ds = [10, 20, 50, 100, 200, 500, 1000]
-# naive_times = Float64[]
-# update_times = Float64[]
+Ds = 10:10:300
+naive_times = Float64[]
+update_times = Float64[]
 
-# for D in Ds
-#     println("Benchmarking D = $D")
-#     A = rand_psd(D + 1)
-#     A_new = A[2:end, end]
-#     A = copy(A[1:(end - 1), 1:(end - 1)])
-#     A_chol = cholesky(A)
-#     x = rand(D)
+for D in Ds
+    println("Benchmarking D = $D")
+    A = rand_psd(D + 1)
+    A_new = A[2:end, end]
+    A = copy(A[1:(end - 1), 1:(end - 1)])
+    A_chol = cholesky(A)
+    x = rand(D)
 
-#     naive_time = @benchmark naive_cholesky(A_copy, $x) setup = begin
-#         A_copy = copy($A)
-#     end evals = 1
-#     push!(naive_times, median(naive_time).time / 1e6)
+    naive_time = @benchmark naive_cholesky(A_copy, $x) setup = begin
+        A_copy = copy($A)
+    end evals = 1
+    push!(naive_times, median(naive_time).time / 1e6)
 
-#     update_time = @benchmark cholesky_update(A_chol, $A_new, $x) setup = begin
-#         A_chol = cholesky(copy($A))
-#     end evals = 1
-#     push!(update_times, median(update_time).time / 1e6)
-# end
+    update_time = @benchmark cholesky_update(A_chol, $A_new, $x) setup = begin
+        A_chol = cholesky(copy($A))
+    end evals = 1
+    push!(update_times, median(update_time).time / 1e6)
+end
 
-# # Plot speed-up
-# speedups = naive_times ./ update_times
-# plot(
-#     Ds,
-#     speedups;
-#     marker=:o,
-#     xlabel="Matrix Size D",
-#     ylabel="Speed-up Factor",
-#     title="Cholesky Update Speed-up over Naive Cholesky",
-#     legend=false,
-#     xscale=:log10,
-#     yscale=:log2,
-# )
+# Plot speed-up
+speedups = naive_times ./ update_times
+plot(
+    Ds,
+    speedups;
+    marker=:o,
+    xlabel="Matrix Size D",
+    ylabel="Speed-up Factor",
+    title="Cholesky Update Speed-up over Naive Cholesky",
+    legend=false,
+    # xscale=:log10,
+    # yscale=:log2,
+)
+savefig("cholesky_update_speedup.pdf")
 
 function windowed_lower_cholesky_update!(L::AbstractMatrix, ks::AbstractVector)
     """
